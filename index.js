@@ -26,7 +26,8 @@ const CONFIG = {
   takeProfitPips: 40, // Take-Profit in Pips
   riskPerTrade: 0.02, // 2% Risiko pro Trade
 };
-// Für Nicht-JPY gehen wir von 5 Dezimalstellen aus
+
+// Für Nicht-JPY (z.B. EURUSD) gehen wir von 5 Dezimalstellen aus
 const pipValue = 0.1;
 
 // 2. Authentifizierung mit XAPI
@@ -35,11 +36,11 @@ const x = new XAPI({
   password: process.env.DEMO_PASSWORD,
   type: "demo",
 });
-
 const socketId = x.Socket.getSocketId();
 let currentBalance = null;
+let currentTrades = [];
 
-// Kontostand (wird über den Balance‑Stream aktualisiert)
+// Kontostand – wird über den Balance-Stream aktualisiert
 const getAccountBalance = async () => {
   if (currentBalance !== null) {
     return currentBalance;
@@ -49,7 +50,8 @@ const getAccountBalance = async () => {
   }
 };
 
-// Berechnung einfacher gleitender Durchschnitte
+// --- Indikator-Funktionen ---
+
 function calculateSMA(prices, period) {
   if (prices.length < period) return null;
   return prices.slice(-period).reduce((sum, price) => sum + price, 0) / period;
@@ -65,7 +67,6 @@ function calculateEMA(prices, period) {
   return ema;
 }
 
-// Berechnung MACD (mit Standardparametern 12,26,9)
 function calculateMACD(prices, shortPeriod = 12, longPeriod = 26, signalPeriod = 9) {
   let macdValues = [];
   for (let i = longPeriod - 1; i < prices.length; i++) {
@@ -75,13 +76,11 @@ function calculateMACD(prices, shortPeriod = 12, longPeriod = 26, signalPeriod =
     const emaLong = calculateEMA(longSlice, longPeriod);
     macdValues.push(emaShort - emaLong);
   }
-  // Signallinie als EMA der MACD-Werte
   const signalLine = calculateEMA(macdValues, signalPeriod);
   const histogram = macdValues[macdValues.length - 1] - signalLine;
   return { macdLine: macdValues[macdValues.length - 1], signalLine, histogram };
 }
 
-// Berechnung des RSI (Standardperiode 14)
 function calculateRSI(prices, period = 14) {
   if (prices.length < period + 1) return null;
   let gains = 0, losses = 0;
@@ -94,10 +93,11 @@ function calculateRSI(prices, period = 14) {
   const avgLoss = losses / period;
   if (avgLoss === 0) return 100;
   const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
+  return 100 - 100 / (1 + rs);
 }
 
-// Verbindung herstellen
+// --- Verbindung & Datenabruf ---
+
 const connect = async () => {
   try {
     await x.connect();
@@ -108,7 +108,6 @@ const connect = async () => {
   }
 };
 
-// Historische Daten abrufen (Candles)
 const getHistoricalData = async (symbol, timeframe) => {
   try {
     const result = await x.getPriceHistory({ symbol, period: timeframe });
@@ -119,7 +118,6 @@ const getHistoricalData = async (symbol, timeframe) => {
   }
 };
 
-// Aktuellen Marktpreis (letzte Kerze im M1) abrufen
 const getCurrentPrice = async (symbol) => {
   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
   if (candles.length === 0) return null;
@@ -127,18 +125,24 @@ const getCurrentPrice = async (symbol) => {
   return closes[closes.length - 1];
 };
 
-// Normalisierungsfunktion: Wandelt Rohpreise in den tatsächlichen Kurs um
 function normalizePrice(symbol, rawPrice) {
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   return parseFloat((rawPrice / factor).toFixed(5));
 }
 
-// Liefert den Pip-Multiplikator
 function getPipMultiplier(symbol) {
   return symbol.includes("JPY") ? 0.01 : 0.0001;
 }
 
-// Handelssignal prüfen – hier werden EMA, MACD und RSI als Filter genutzt
+function calculatePositionSize(accountBalance, riskPerTrade, stopLossPips, symbol) {
+  const pipMultiplier = getPipMultiplier(symbol);
+  const factor = symbol.includes("JPY") ? 1000 : 100000;
+  const riskAmount = accountBalance * riskPerTrade;
+  return riskAmount / (stopLossPips * (pipMultiplier * factor));
+}
+
+// --- Signal-Generierung ---
+
 const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) => {
   const candles = await getHistoricalData(symbol, timeframe);
   if (candles.length === 0) {
@@ -149,8 +153,8 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   const emaFast = calculateEMA(closes, fastPeriod);
   const emaSlow = calculateEMA(closes, slowPeriod);
   const lastPrice = closes[closes.length - 1];
-
-  // Berechne MACD und RSI (nutze die letzten 50 Candles für bessere Stabilität)
+  
+  // Für stabilere Werte: verwende die letzten 50 Kerzen für MACD und RSI
   const recentCloses = closes.slice(-50);
   const macdData = calculateMACD(recentCloses);
   const rsiValue = calculateRSI(recentCloses);
@@ -158,9 +162,7 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   console.log(
     `[${symbol} - TF ${timeframe}] emaFast=${emaFast}, emaSlow=${emaSlow}, rawLastPrice=${lastPrice}, MACD hist=${macdData.histogram}, RSI=${rsiValue}`
   );
-  // Signalbestimmung:
-  // BUY, wenn EMA-Bedingung, MACD-Histogramm > 0 und RSI < 70
-  // SELL, wenn EMA-Bedingung, MACD-Histogramm < 0 und RSI > 30
+
   if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
     return { signal: "BUY", rawPrice: lastPrice };
   } else if (emaFast < emaSlow && macdData.histogram < 0 && rsiValue > 30) {
@@ -170,7 +172,6 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   }
 };
 
-// Multi-Timeframe-Analyse: Prüfe Signale für M1, M15 und H1
 const checkMultiTimeframeSignal = async (symbol) => {
   const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastMA, CONFIG.slowMA);
   const signalM15 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M15, CONFIG.fastMA, CONFIG.slowMA);
@@ -185,19 +186,14 @@ const checkMultiTimeframeSignal = async (symbol) => {
   return null;
 };
 
-// Berechnung der Lot-Größe (nur 1 Trade pro Währungspaar, max. 5 insgesamt)
-function calculatePositionSize(accountBalance, riskPerTrade, stopLossPips, symbol) {
-  const pipMultiplier = getPipMultiplier(symbol);
-  const factor = symbol.includes("JPY") ? 1000 : 100000;
-  const riskAmount = accountBalance * riskPerTrade;
-  return riskAmount / (stopLossPips * (pipMultiplier * factor));
-}
+// --- Orderausführung ---
 
-// Orderausführung: Nutzt den aktuellen Marktpreis als Basis und normalisiert die Preise korrekt
+// Hier wird der Orderpreis normalisiert, sodass er 5 Dezimalstellen hat (z.B. 1.03616 für EURUSD)
 async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   const pipMultiplier = getPipMultiplier(symbol);
   const spreadRaw = 0.0002 * factor;
+  // Für BUY addiere den Spread, für SELL nutze den Rohpreis
   const rawEntry = direction === "BUY" ? rawPrice + spreadRaw : rawPrice;
   const entry = normalizePrice(symbol, rawEntry);
   const rawSL = direction === "BUY"
@@ -214,7 +210,7 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
 
   try {
     const order = await x.Socket.send.tradeTransaction({
-      cmd: direction === "BUY" ? 0 : 1,
+      cmd: direction === "BUY" ? 0 : 1, // 0 = BUY, 1 = SELL
       customComment: `Scalping Bot Order for ${symbol}`,
       expiration: Date.now() + 3600000,
       offset: 0,
@@ -232,11 +228,93 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   }
 }
 
-// Offene Positionen abrufen (als Promise verpackt)
+// --- Backtesting-Funktion ---
+// Diese Funktion lädt historische Daten für einen definierten Zeitraum (z.B. nach der Coronakrise)
+// und simuliert Trades anhand der Strategie (Schließung im nächsten Candle, falls vorhanden).
+async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp) {
+  console.log(`Backtesting ${symbol} from ${new Date(startTimestamp * 1000)} to ${new Date(endTimestamp * 1000)}`);
+  const allCandlesData = await x.getPriceHistory({ symbol, period: timeframe, start: startTimestamp, end: endTimestamp });
+  if (!allCandlesData || !allCandlesData.candles) {
+    console.error("Keine historischen Daten gefunden.");
+    return;
+  }
+  const candles = allCandlesData.candles;
+  console.log(`Backtesting: ${candles.length} Candles geladen.`);
+  
+  let trades = [];
+  // Iteriere bis zum vorletzten Candle, damit ein "nächster" Candle existiert
+  for (let i = 50; i < candles.length - 1; i++) {
+    const slice = candles.slice(0, i + 1);
+    const closes = slice.map(c => c.close);
+    const emaFast = calculateEMA(closes, CONFIG.fastMA);
+    const emaSlow = calculateEMA(closes, CONFIG.slowMA);
+    const recentCloses = closes.slice(-50);
+    const macdData = calculateMACD(recentCloses);
+    const rsiValue = calculateRSI(recentCloses);
+    const currentPrice = closes[closes.length - 1];
+    
+    let signal = null;
+    if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
+      signal = "BUY";
+    } else if (emaFast < emaSlow && macdData.histogram < 0 && rsiValue > 30) {
+      signal = "SELL";
+    }
+    if (signal && i + 1 < candles.length) {
+      const nextCandle = candles[i + 1];
+      let outcome = 0;
+      if (signal === "BUY") {
+        outcome = nextCandle.close - currentPrice;
+      } else {
+        outcome = currentPrice - nextCandle.close;
+      }
+      trades.push({ signal, entry: currentPrice, exit: nextCandle.close, profit: outcome });
+    }
+  }
+  
+  const totalTrades = trades.length;
+  const wins = trades.filter(t => t.profit > 0).length;
+  const losses = totalTrades - wins;
+  const totalProfit = trades.reduce((sum, t) => sum + t.profit, 0);
+  console.log(`Backtesting Ergebnisse für ${symbol}:`);
+  console.log(`Trades: ${totalTrades}, Wins: ${wins}, Losses: ${losses}, Total Profit: ${totalProfit}`);
+  return { totalTrades, wins, losses, totalProfit, trades };
+}
+
+// --- Handelslogik & Risiko-Kontrolle ---
+
+// Pro Währungspaar nur ein Trade gleichzeitig und insgesamt maximal 5 offene Trades.
+async function checkAndTradeForSymbol(symbol) {
+  const signalData = await checkMultiTimeframeSignal(symbol);
+  if (!signalData) {
+    console.log(`No consistent multi-timeframe signal for ${symbol}`);
+    return;
+  }
+  console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
+  
+  const openPositions = await getOpenPositionsCount();
+  if (openPositions >= 5) {
+    console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
+    return;
+  }
+  
+  const currentRawPrice = await getCurrentPrice(symbol);
+  console.log(`Current market price for ${symbol}: ${currentRawPrice}`);
+  
+  const balance = await getAccountBalance();
+  if (!balance) {
+    console.error("Couldn't check balance!");
+    return;
+  }
+  
+  const positionSize = calculatePositionSize(balance, CONFIG.riskPerTrade, CONFIG.stopLossPips, symbol);
+  console.log(`Placing ${signalData.signal} trade for ${symbol} with lot size: ${positionSize}`);
+  await executeTradeForSymbol(symbol, signalData.signal, currentRawPrice, positionSize);
+}
+
+// Offene Positionen abrufen (als Promise)
 async function getOpenPositionsCount() {
   return new Promise((resolve) => {
     x.Stream.listen.getTrades((data) => {
-      // Wir gehen davon aus, dass data entweder ein Array oder ein einzelnes Objekt ist
       const trades = Array.isArray(data) ? data : [data];
       const openTrades = trades.filter(t => t && !t.closed);
       console.log("Open positions update:", openTrades);
@@ -248,51 +326,7 @@ async function getOpenPositionsCount() {
   });
 }
 
-// Für jedes Symbol prüfen und ggf. einen Trade auslösen (max. 1 Trade pro Symbol)
-async function checkAndTradeForSymbol(symbol) {
-  const signalData = await checkMultiTimeframeSignal(symbol);
-  if (!signalData) {
-    console.log(`No consistent multi-timeframe signal for ${symbol}`);
-    return;
-  }
-  console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
-
-  // Prüfe, ob bereits ein Trade für dieses Symbol offen ist
-  const openPositions = await getOpenPositionsCount();
-  if (openPositions >= 5) {
-    console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
-    return;
-  }
-
-  const currentRawPrice = await getCurrentPrice(symbol);
-  console.log(`Current market price for ${symbol}: ${currentRawPrice}`);
-
-  const balance = await getAccountBalance();
-  if (!balance) {
-    console.error("Couldn't check balance!");
-    return;
-  }
-
-  const positionSize = calculatePositionSize(balance, CONFIG.riskPerTrade, CONFIG.stopLossPips, symbol);
-  console.log(`Placing ${signalData.signal} trade for ${symbol} with lot size: ${positionSize}`);
-  await executeTradeForSymbol(symbol, signalData.signal, currentRawPrice, positionSize);
-}
-
-// Iteriere über alle definierten Symbole und prüfe einzeln
-async function checkAllPairsAndTrade() {
-  for (let symbol of Object.values(CONFIG.symbols)) {
-    await checkAndTradeForSymbol(symbol);
-  }
-}
-
-const tick = async () => {
-  x.Stream.listen.getTickPrices((data) => {
-    console.log("gotten:", data);
-    return data;
-  });
-};
-
-// Main function
+// --- Main function ---
 const startBot = async () => {
   try {
     await connect();
@@ -325,7 +359,12 @@ const startBot = async () => {
       }
     });
 
-    // Starte Überprüfung der Handelssignale alle 60 Sekunden
+    // Backtesting starten (Beispiel: Daten ab 1. Juli 2020 bis heute, M1)
+    const startTimestamp = Math.floor(new Date("2020-07-01T00:00:00Z").getTime() / 1000);
+    const endTimestamp = Math.floor(Date.now() / 1000);
+    await backtestStrategy("EURUSD", CONFIG.timeframe.M1, startTimestamp, endTimestamp);
+
+    // Alle 60 Sekunden Signale prüfen und ggf. Trades auslösen
     setInterval(async () => {
       await checkAllPairsAndTrade();
     }, 60000);
@@ -342,12 +381,12 @@ const startBot = async () => {
   } catch (error) {
     console.error("Error:", error);
     throw error;
+  } finally {
+    // Hier ggf. später x.disconnect() einfügen
   }
 };
 
 startBot();
-
-
 
 
 async function modifyTradeStopLoss(tradeId, newSL) {
