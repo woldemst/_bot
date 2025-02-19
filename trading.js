@@ -234,3 +234,49 @@ module.exports = {
 // };
 
 // startBot();
+
+
+
+
+async function modifyTradeStopLoss(tradeId, newSL) {
+  try {
+    const result = await x.Socket.send.tradeTransaction({
+      cmd: 2, // Modify command
+      tradeTransInfo: { tradeId, sl: newSL },
+    });
+    console.log("Trade modified:", result);
+  } catch (err) {
+    console.error("Failed to modify trade:", err);
+  }
+}
+
+// Trailing Stop Logik: Überwacht den Preis und passt den Stop Loss an, wenn sich der Markt zugunsten des Trades bewegt.
+function applyTrailingStop(tradeId, symbol, direction, entry) {
+  const pipMultiplier = getPipMultiplier(symbol);
+  const trailingPips = 10; // Beispiel: 10 Pips trailing
+  const trailingDistance = trailingPips * pipMultiplier;
+  const checkInterval = 5000; // Prüfe alle 5 Sekunden
+
+  const intervalId = setInterval(async () => {
+    try {
+      const currentPrice = await getCurrentPrice(symbol);
+      if (currentPrice == null) return;
+      if (direction === "BUY") {
+        if (currentPrice > entry + trailingDistance) {
+          const newSL = currentPrice - trailingDistance;
+          console.log(`Trailing stop update for trade ${tradeId}: new SL = ${newSL}`);
+          await modifyTradeStopLoss(tradeId, newSL);
+        }
+      } else {
+        if (currentPrice < entry - trailingDistance) {
+          const newSL = currentPrice + trailingDistance;
+          console.log(`Trailing stop update for trade ${tradeId}: new SL = ${newSL}`);
+          await modifyTradeStopLoss(tradeId, newSL);
+        }
+      }
+    } catch (err) {
+      console.error("Error in trailing stop check:", err);
+    }
+  }, checkInterval);
+  return intervalId;
+}
