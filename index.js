@@ -293,12 +293,14 @@ const tick = async () => {
   });
 };
 
+// Globales Handling von unhandledRejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection:", reason);
+});
 
-// Backtesting‑Funktion – verbessert und erweitert
+// --- Verbessertes Backtesting ---
 async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp) {
-  console.log(
-    `Backtesting ${symbol} from ${new Date(startTimestamp * 1000)} to ${new Date(endTimestamp * 1000)}`
-  );
+  console.log(`Backtesting ${symbol} from ${new Date(startTimestamp * 1000)} to ${new Date(endTimestamp * 1000)}`);
   const allData = await x.getPriceHistory({ symbol, period: timeframe, start: startTimestamp, end: endTimestamp });
   if (!allData || !allData.candles) {
     console.error("Keine historischen Daten gefunden.");
@@ -311,20 +313,20 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
   let equityCurve = [];
   let equity = 10000; // Startkapital
   const initialCapital = equity;
-  
+
   // Parameter für Risiko & Reward
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   const pipMultiplier = getPipMultiplier(symbol);
   const riskDistance = CONFIG.stopLossPips * (pipMultiplier * factor);
   const rewardDistance = CONFIG.takeProfitPips * (pipMultiplier * factor);
-  const desiredRR = rewardDistance / riskDistance; // Erwartetes RR
-  
-  // Simuliere Trades ab Index 50 (sodass genügend Daten für Indikatoren vorhanden sind)
+  const desiredRR = rewardDistance / riskDistance; // Erwartetes RR-Verhältnis
+
+  // Simuliere Trades ab Index 50 (damit genügend Daten für die Indikatoren vorhanden sind)
   for (let i = 50; i < candles.length - 1; i++) {
     const slice = candles.slice(0, i + 1);
-    const closes = slice.map(c => c.close);
-    
-    // Berechne Indikatoren über alle bisherigen Daten (alternativ: nur über die letzten N Kerzen)
+    const closes = slice.map((c) => c.close);
+
+    // Berechne Indikatoren über alle bisherigen Daten
     const emaFast = calculateEMA(closes, CONFIG.fastMA);
     const emaSlow = calculateEMA(closes, CONFIG.slowMA);
     const recentCloses = closes.slice(-50);
@@ -333,7 +335,7 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
     const currentRawPrice = closes[closes.length - 1];
     const nextCandle = candles[i + 1];
     if (!nextCandle || typeof nextCandle.close === "undefined") continue;
-    
+
     // Signalbestimmung
     let signal = null;
     if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
@@ -341,69 +343,61 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
     } else if (emaFast < emaSlow && macdData.histogram < 0 && rsiValue > 30) {
       signal = "SELL";
     }
-    if (signal) {
-      // Simuliere Trade-Ausgang: Trade wird 1 Candle später geschlossen
-      const exitRawPrice = nextCandle.close;
-      let profitRaw = 0;
-      if (signal === "BUY") {
-        profitRaw = exitRawPrice - currentRawPrice;
-      } else {
-        profitRaw = currentRawPrice - exitRawPrice;
-      }
-      const profitPips = profitRaw / (pipMultiplier * factor);
-      
-      // Normalisierte Preise
-      const entry = normalizePrice(symbol, currentRawPrice);
-      const exit = normalizePrice(symbol, exitRawPrice);
-      
-      // Berechne Profit in Prozent (bezogen auf den Entry-Preis)
-      const profitPct = ((exit - entry) / entry) * 100;
-      
-      // Bestimme, ob der Trade theoretisch durch TP oder SL geschlossen worden wäre
-      let exitReason = "CandleClose"; // Default: Trade schließt mit der nächsten Kerze
-      if (signal === "BUY") {
-        if (exitRawPrice >= currentRawPrice + rewardDistance) {
-          exitReason = "TP";
-        } else if (exitRawPrice <= currentRawPrice - riskDistance) {
-          exitReason = "SL";
-        }
-      } else { // SELL
-        if (exitRawPrice <= currentRawPrice - rewardDistance) {
-          exitReason = "TP";
-        } else if (exitRawPrice >= currentRawPrice + riskDistance) {
-          exitReason = "SL";
-        }
-      }
-      
-      // Simuliere Trade-Dauer: Hier 1 Candle
-      const durationCandles = 1;
-      
-      trades.push({
-        signal,
-        entry: currentRawPrice,
-        normalizedEntry: entry,
-        exit: exitRawPrice,
-        normalizedExit: exit,
-        profit: profitRaw,
-        profitPct,
-        profitPips,
-        durationCandles,
-        exitReason,
-        rrRatio: desiredRR.toFixed(2)
-      });
-      equity += profitRaw;
-      equityCurve.push(equity);
+    if (!signal) continue;
+
+    // Simuliere Trade-Ausgang (Trade wird in der nächsten Kerze geschlossen)
+    const exitRawPrice = nextCandle.close;
+    let profitRaw = 0;
+    if (signal === "BUY") {
+      profitRaw = exitRawPrice - currentRawPrice;
+    } else {
+      profitRaw = currentRawPrice - exitRawPrice;
     }
+    const profitPips = profitRaw / (pipMultiplier * factor);
+
+    // Normalisiere Entry und Exit
+    const entryNorm = normalizePrice(symbol, currentRawPrice);
+    const exitNorm = normalizePrice(symbol, exitRawPrice);
+    const profitPct = ((exitNorm - entryNorm) / entryNorm) * 100;
+
+    // Bestimme den Exit-Grund
+    let exitReason = "CandleClose";
+    if (signal === "BUY") {
+      if (exitRawPrice >= currentRawPrice + rewardDistance) exitReason = "TP";
+      else if (exitRawPrice <= currentRawPrice - riskDistance) exitReason = "SL";
+    } else {
+      if (exitRawPrice <= currentRawPrice - rewardDistance) exitReason = "TP";
+      else if (exitRawPrice >= currentRawPrice + riskDistance) exitReason = "SL";
+    }
+
+    // Annahme: Trade-Dauer = 1 Candle
+    const durationCandles = 1;
+
+    trades.push({
+      signal,
+      entry: currentRawPrice,
+      normalizedEntry: entryNorm,
+      exit: exitRawPrice,
+      normalizedExit: exitNorm,
+      profit: profitRaw,
+      profitPct,
+      profitPips,
+      durationCandles,
+      exitReason,
+      rrRatio: desiredRR.toFixed(2),
+    });
+    equity += profitRaw;
+    equityCurve.push(equity);
   }
-  
+
   const totalTrades = trades.length;
-  const wins = trades.filter(t => t.profit > 0).length;
+  const wins = trades.filter((t) => t.profit > 0).length;
   const losses = totalTrades - wins;
   const totalProfit = equity - initialCapital;
   const totalProfitPct = (totalProfit / initialCapital) * 100;
   const avgProfit = totalTrades ? totalProfit / totalTrades : 0;
   const avgProfitPct = totalTrades ? totalProfitPct / totalTrades : 0;
-  
+
   // Berechne maximalen Drawdown
   let maxDrawdown = 0;
   let peak = equityCurve[0] || initialCapital;
@@ -413,11 +407,10 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
     if (drawdown > maxDrawdown) maxDrawdown = drawdown;
   }
   const maxDrawdownPct = (maxDrawdown / initialCapital) * 100;
-  
+
   const avgDuration = totalTrades ? trades.reduce((sum, t) => sum + t.durationCandles, 0) / totalTrades : 0;
   const avgRR = totalTrades ? trades.reduce((sum, t) => sum + parseFloat(t.rrRatio), 0) / totalTrades : 0;
-  
-  // Ausgabe der Ergebnisse
+
   console.log(`Backtesting Ergebnisse für ${symbol}:`);
   console.log(`Trades: ${totalTrades}, Wins: ${wins} (${((wins / totalTrades) * 100).toFixed(2)}%), Losses: ${losses}`);
   console.log(`Total Profit: ${totalProfit.toFixed(2)} (${totalProfitPct.toFixed(2)}%)`);
@@ -427,7 +420,7 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
   console.log(`Average RR Ratio: ${avgRR.toFixed(2)}`);
   console.log("Detailed Trades Sample:", trades.slice(0, 10));
   console.log("Equity Curve (letzte 10 Werte):", equityCurve.slice(-10));
-  
+
   return {
     totalTrades,
     wins,
@@ -444,6 +437,20 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
     equityCurve,
   };
 }
+
+const test = async () => {
+  // Backtesting starten (Beispiel: Zeitraum ab 1. Juli 2020 bis heute)
+  const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
+  // console.log("startTimestamp:", startTimestamp);
+  // const endTimestamp = Math.floor(Date.now() / 1000);
+  const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
+  // console.log("endTimestamp:", endTimestamp);
+
+  const backtestResult = await backtestStrategy(CONFIG.symbols.EURUSD, CONFIG.timeframe.M5, startTimestamp, endTimestamp);
+  console.log("Backtesting Result:", backtestResult);
+  // Starte Prüfung der Handelssignale alle 60 Sekunden
+};
+
 // --- Main function ---
 const startBot = async () => {
   try {
@@ -478,27 +485,17 @@ const startBot = async () => {
       }
     });
 
-    // Backtesting starten (Beispiel: Zeitraum ab 1. Juli 2020 bis heute)
-    const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
-    // console.log("startTimestamp:", startTimestamp);
-    // const endTimestamp = Math.floor(Date.now() / 1000);
-    const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
-    // console.log("endTimestamp:", endTimestamp);
+    setInterval(async () => {
+      await checkAllPairsAndTrade();
+    }, 60000);
 
-    const backtestResult = await backtestStrategy(CONFIG.symbols.EURUSD, CONFIG.timeframe.M5, startTimestamp, endTimestamp);
-    // console.log("Backtesting Result:", backtestResult);
-    // Starte Prüfung der Handelssignale alle 60 Sekunden
-    // setInterval(async () => {
-    //   await checkAllPairsAndTrade();
-    // }, 60000);
-
-    // const historicalData = await getHistoricalData(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1);
-    // if (historicalData.length === 0) {
-    //   console.error("No historical data downloaded!");
-    //   return;
-    // }
-    // const closes = historicalData.map((candle) => candle.close);
-    // console.log("Historical data loaded:", closes.length, "candles");
+    const historicalData = await getHistoricalData(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1);
+    if (historicalData.length === 0) {
+      console.error("No historical data downloaded!");
+      return;
+    }
+    const closes = historicalData.map((candle) => candle.close);
+    console.log("Historical data loaded:", closes.length, "candles");
 
     console.log("Bot läuft...");
   } catch (error) {
