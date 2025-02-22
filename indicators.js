@@ -29,3 +29,5 @@ function getPipMultiplier(symbol) {
 }
 
 module.exports = { calculateSMA, calculateEMA, normalizePrice, getPipMultiplier };
+
+

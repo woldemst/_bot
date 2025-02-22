@@ -280,3 +280,12 @@ function applyTrailingStop(tradeId, symbol, direction, entry) {
   }, checkInterval);
   return intervalId;
 }
+
+
+const historicalData = await getHistoricalData(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1);
+if (historicalData.length === 0) {
+  console.error("No historical data downloaded!");
+  return;
+}
+const closes = historicalData.map((candle) => candle.close);
+console.log("Historical data loaded:", closes.length, "candles");
