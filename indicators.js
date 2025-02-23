@@ -1,11 +1,10 @@
-// Berechnet den einfachen gleitenden Durchschnitt (SMA)
+// Einfacher gleitender Durchschnitt
 function calculateSMA(prices, period) {
   if (prices.length < period) return null;
-  const slice = prices.slice(-period);
-  return slice.reduce((sum, price) => sum + price, 0) / period;
+  return prices.slice(-period).reduce((sum, price) => sum + price, 0) / period;
 }
 
-// Berechnet den exponentiellen gleitenden Durchschnitt (EMA)
+// Exponentieller gleitender Durchschnitt
 function calculateEMA(prices, period) {
   if (prices.length < period) return null;
   const k = 2 / (period + 1);
@@ -16,18 +15,62 @@ function calculateEMA(prices, period) {
   return ema;
 }
 
-// Normalisiert einen Rohpreis (z.B. 83229 → 0.83229)
-function normalizePrice(symbol, rawPrice) {
-  // Für JPY-Paare: Dividiere durch 1000, sonst durch 100000
-  const factor = symbol.includes("JPY") ? 1000 : 100000;
-  return parseFloat((rawPrice / factor).toFixed(5));
+// MACD-Berechnung (Standard: 12, 26, 9)
+function calculateMACD(prices, shortPeriod = CONFIG.macdShort, longPeriod = CONFIG.macdLong, signalPeriod = CONFIG.macdSignal) {
+  let macdValues = [];
+  for (let i = longPeriod - 1; i < prices.length; i++) {
+    const shortSlice = prices.slice(i - shortPeriod + 1, i + 1);
+    const longSlice = prices.slice(i - longPeriod + 1, i + 1);
+    const emaShort = calculateEMA(shortSlice, shortPeriod);
+    const emaLong = calculateEMA(longSlice, longPeriod);
+    macdValues.push(emaShort - emaLong);
+  }
+  const signalLine = calculateEMA(macdValues, signalPeriod);
+  const histogram = macdValues[macdValues.length - 1] - signalLine;
+  return { macdLine: macdValues[macdValues.length - 1], signalLine, histogram };
 }
 
-// Gibt den Pip-Multiplikator zurück (0.01 für JPY, sonst 0.0001)
-function getPipMultiplier(symbol) {
-  return symbol.includes("JPY") ? 0.01 : 0.0001;
+// RSI-Berechnung (Standardperiode 14)
+function calculateRSI(prices, period = CONFIG.rsiPeriod) {
+  if (prices.length < period + 1) return null;
+  let gains = 0,
+    losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) gains += change;
+    else losses -= change;
+  }
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - 100 / (1 + rs);
 }
 
+// ATR-Berechnung (Average True Range, Standardperiode 14)
+function calculateATR(candles, period = 14) {
+  if (candles.length < period + 1) return null;
+  let trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const high = candles[i].high;
+    const low = candles[i].low;
+    const prevClose = candles[i - 1].close;
+    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+    trs.push(tr);
+  }
+  return calculateSMA(trs, period);
+}
+
+// Beispiel: Dynamische SL/TP-Berechnung mit ATR
+function calculateDynamicSLTP(entryRaw, atr, isBuy) {
+  const slDistance = atr * CONFIG.atrMultiplierSL;
+  const tpDistance = atr * CONFIG.atrMultiplierTP;
+  if (isBuy) {
+    return { sl: entryRaw - slDistance, tp: entryRaw + tpDistance };
+  } else {
+    return { sl: entryRaw + slDistance, tp: entryRaw - tpDistance };
+  }
+}
 module.exports = { calculateSMA, calculateEMA, normalizePrice, getPipMultiplier };
 
 
