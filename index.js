@@ -2,7 +2,7 @@ require("dotenv").config();
 const XAPI = require("xapi-node").default;
 const { TYPE_FIELD, CMD_FIELD } = XAPI;
 
-// 1. Konfiguration
+// 1. Configuration
 const CONFIG = {
   symbols: {
     EURUSD: "EURUSD",
@@ -25,10 +25,18 @@ const CONFIG = {
   macdLong: 26,
   macdSignal: 9,
   rsiPeriod: 14,
-  stopLossPips: 20, // Stop-Loss in Pips
-  takeProfitPips: 40, // Take-Profit in Pips
+  stopLossPips: 5, // Feste Stop-Loss-Pips als Fallback
+  takeProfitPips: 10, // Feste Take-Profit-Pips als Fallback
   riskPerTrade: 0.02, // 2% Risiko pro Trade
+  // Dynamische SL/TP: Multiplikatoren für ATR-basierte Berechnung
+  atrMultiplierSL: 1.5,
+  atrMultiplierTP: 2.0,
+  // Backtesting-Parameter
+  maxTradeDurationCandles: 10, // maximal betrachtete Candles für einen Trade
+  maxDrawdownPctLimit: 10, // Stoppe Backtesting, wenn Drawdown 10% erreicht
+  minRR: 2.0, // Mindest-Erwartungs-RR, damit ein Trade berücksichtigt wird
 };
+
 // Globales Handling von unhandledRejections
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
@@ -94,8 +102,33 @@ function calculateRSI(prices, period = CONFIG.rsiPeriod) {
   const rs = avgGain / avgLoss;
   return 100 - 100 / (1 + rs);
 }
-// --- Verbindung & Datenabruf ---
 
+// ATR-Berechnung (Average True Range, Standardperiode 14)
+function calculateATR(candles, period = 14) {
+  if (candles.length < period + 1) return null;
+  let trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const high = candles[i].high;
+    const low = candles[i].low;
+    const prevClose = candles[i - 1].close;
+    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+    trs.push(tr);
+  }
+  return calculateSMA(trs, period);
+}
+
+// Beispiel: Dynamische SL/TP-Berechnung mit ATR
+function calculateDynamicSLTP(entryRaw, atr, isBuy) {
+  const slDistance = atr * CONFIG.atrMultiplierSL;
+  const tpDistance = atr * CONFIG.atrMultiplierTP;
+  if (isBuy) {
+    return { sl: entryRaw - slDistance, tp: entryRaw + tpDistance };
+  } else {
+    return { sl: entryRaw + slDistance, tp: entryRaw - tpDistance };
+  }
+}
+
+// --- Verbindung & Datenabruf ---
 const connect = async () => {
   try {
     await x.connect();
@@ -142,8 +175,7 @@ function calculatePositionSize(accountBalance, riskPerTrade, stopLossPips, symbo
   return riskAmount / (stopLossPips * (pipMultiplier * factor));
 }
 
-// --- Signal-Generierung ---
-
+// --- Signal-Generierung --- //
 // Prüft das Handelssignal basierend auf EMA, MACD und RSI
 const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) => {
   const candles = await getHistoricalData(symbol, timeframe);
@@ -151,6 +183,7 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
     console.error(`No data for ${symbol}`);
     return null;
   }
+
   const closes = candles.map((c) => c.close);
   const emaFast = calculateEMA(closes, fastPeriod);
   const emaSlow = calculateEMA(closes, slowPeriod);
@@ -160,10 +193,6 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   const recentCloses = closes.slice(-50);
   const macdData = calculateMACD(recentCloses);
   const rsiValue = calculateRSI(recentCloses);
-
-  // console.log(
-  //   `[${symbol} - TF ${timeframe}] emaFast=${emaFast}, emaSlow=${emaSlow}, rawLastPrice=${lastPrice}, MACD hist=${macdData.histogram}, RSI=${rsiValue}`
-  // );
 
   if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
     return { signal: "BUY", rawPrice: lastPrice };
@@ -190,8 +219,7 @@ const checkMultiTimeframeSignal = async (symbol) => {
   return null;
 };
 
-// --- Orderausführung ---
-
+// --- Orderausführung --- //
 // Orderausführung: Nutzt den normalisierten Preis, um Entry, SL und TP zu berechnen.
 async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   const factor = symbol.includes("JPY") ? 1000 : 100000;
@@ -199,17 +227,29 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   const spreadRaw = 0.0002 * factor;
   const rawEntry = direction === "BUY" ? rawPrice + spreadRaw : rawPrice;
   const entry = normalizePrice(symbol, rawEntry);
-  const rawSL =
-    direction === "BUY"
-      ? rawEntry - CONFIG.stopLossPips * (pipMultiplier * factor)
-      : rawEntry + CONFIG.stopLossPips * (pipMultiplier * factor);
-  const rawTP =
-    direction === "BUY"
-      ? rawEntry + CONFIG.takeProfitPips * (pipMultiplier * factor)
-      : rawEntry - CONFIG.takeProfitPips * (pipMultiplier * factor);
-  const sl = normalizePrice(symbol, rawSL);
-  const tp = normalizePrice(symbol, rawTP);
 
+  // ATR-Berechnung: Hole die letzten 14 Candles (oder passe die Periode an)
+  const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
+  const atr = calculateATR(candles.slice(-15)); // let’s assume 15 Candles for ATR calculation
+
+  let sl, tp;
+  if (atr) {
+    const dynamicSLTP = calculateDynamicSLTP(rawEntry, atr, direction === "BUY");
+    sl = normalizePrice(symbol, dynamicSLTP.sl);
+    tp = normalizePrice(symbol, dynamicSLTP.tp);
+  } else {
+    // Fallback: Feste SL/TP-Berechnung
+    const rawSL =
+      direction === "BUY"
+        ? rawEntry - CONFIG.stopLossPips * (pipMultiplier * factor)
+        : rawEntry + CONFIG.stopLossPips * (pipMultiplier * factor);
+    const rawTP =
+      direction === "BUY"
+        ? rawEntry + CONFIG.takeProfitPips * (pipMultiplier * factor)
+        : rawEntry - CONFIG.takeProfitPips * (pipMultiplier * factor);
+    sl = normalizePrice(symbol, rawSL);
+    tp = normalizePrice(symbol, rawTP);
+  }
   console.log(`Executing ${direction} trade for ${symbol}: entry=${entry}, SL=${sl}, TP=${tp}`);
   console.log("entry:", entry, "stop loss:", sl, "take profit:", tp);
 
@@ -238,12 +278,11 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   }
 }
 
-// Neue Funktion: Gibt die Anzahl offener Trades für ein bestimmtes Symbol zurück
+// Offene Positionen (als Promise verpackt) //
 async function getOpenPositionsForSymbol(symbol) {
   return new Promise((resolve) => {
     x.Stream.listen.getTrades((data) => {
       const trades = Array.isArray(data) ? data : [data];
-      // Filtere nur Trades, die nicht geschlossen sind und zum angegebenen Symbol gehören
       const openTradesForSymbol = trades.filter((t) => t && !t.closed && t.symbol === symbol);
       console.log(`Open positions for ${symbol}:`, openTradesForSymbol);
       resolve(openTradesForSymbol.length);
@@ -253,11 +292,10 @@ async function getOpenPositionsForSymbol(symbol) {
     return 0;
   });
 }
-// Offene Positionen (als Promise verpackt)
+
 async function getOpenPositionsCount() {
   return new Promise((resolve) => {
     x.Stream.listen.getTrades((data) => {
-      // Gehe davon aus, dass data ein Array oder einzelnes Objekt ist
       const trades = Array.isArray(data) ? data : [data];
       const openTrades = trades.filter((t) => t && !t.closed);
       console.log("Open positions update:", openTrades);
@@ -277,7 +315,7 @@ async function checkAndTradeForSymbol(symbol) {
     return;
   }
   console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
-  // Prüfe, ob für dieses Symbol bereits ein Trade offen ist
+
   const openPositionsForSymbol = await getOpenPositionsForSymbol(symbol);
   if (openPositionsForSymbol >= 1) {
     console.log(`Trade for ${symbol} is already open. Skipping new trade.`);
@@ -310,7 +348,6 @@ async function checkAllPairsAndTrade() {
     await checkAndTradeForSymbol(symbol);
   }
 }
-
 const tick = async () => {
   x.Stream.listen.getTickPrices((data) => {
     console.log("gotten:", data);
@@ -318,7 +355,7 @@ const tick = async () => {
   });
 };
 
-// --- Verbessertes Backtesting ---
+// --- Backtesting-Funktion ---
 async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp) {
   console.log(`Backtesting ${symbol} from ${new Date(startTimestamp * 1000)} to ${new Date(endTimestamp * 1000)}`);
   let allData;
@@ -339,40 +376,32 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
   let equityCurve = [];
   let equity = 1000; // Startkapital
   const initialCapital = equity;
-  
-  // Risikoparameter
+
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   const pipMultiplier = getPipMultiplier(symbol);
   const riskDistance = CONFIG.stopLossPips * (pipMultiplier * factor);
   const rewardDistance = CONFIG.takeProfitPips * (pipMultiplier * factor);
-  const expectedRR = rewardDistance / riskDistance; // Erwartetes RR-Verhältnis
-  
-  // Globales Drawdown-Limit (z.B. 10 % des Startkapitals)
-  const maxDrawdownPctLimit = 10;
-  // Mindest-RR, um einen Trade überhaupt zu berücksichtigen
-  const minRR = 2.0;
-  // Maximale Trade-Dauer in Candles (z.B. 10 Candles)
-  const maxDuration = 10;
-  
-  // Simuliere Trades ab Candle 50 (damit genügend Daten für Indikatoren vorhanden sind)
+  const expectedRR = rewardDistance / riskDistance;
+
+  const maxDrawdownPctLimit = CONFIG.maxDrawdownPctLimit;
+  const minRR = CONFIG.minRR;
+  const maxDuration = CONFIG.maxTradeDurationCandles;
+
+  // Simuliere Trades ab Candle 50
   for (let i = 50; i < candles.length - 1; i++) {
-    // Prüfe, ob der Drawdown das Limit erreicht hat
     if (((initialCapital - equity) / initialCapital) * 100 >= maxDrawdownPctLimit) {
       console.log("Maximaler Drawdown erreicht – keine weiteren Trades simuliert.");
       break;
     }
-    
     const slice = candles.slice(0, i + 1);
-    const closes = slice.map(c => c.close);
-    
+    const closes = slice.map((c) => c.close);
     const emaFast = calculateEMA(closes, CONFIG.fastMA);
     const emaSlow = calculateEMA(closes, CONFIG.slowMA);
     const recentCloses = closes.slice(-50);
     const macdData = calculateMACD(recentCloses);
     const rsiValue = calculateRSI(recentCloses);
     const entryRaw = closes[closes.length - 1];
-    
-    // Signalbestimmung
+
     let signal = null;
     if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
       signal = "BUY";
@@ -380,11 +409,8 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
       signal = "SELL";
     }
     if (!signal) continue;
-    
-    // Nur Trades berücksichtigen, wenn das erwartete RR mindestens minRR beträgt
     if (expectedRR < minRR) continue;
-    
-    // Simuliere den Trade: Suche in den folgenden Candles (bis maxDuration), wann TP oder SL erreicht wird
+
     let exitRaw = null;
     let exitReason = null;
     let durationCandles = 0;
@@ -402,7 +428,7 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
           exitReason = "TP";
           break;
         }
-      } else { // SELL
+      } else {
         if (candle.high >= entryRaw + riskDistance) {
           exitRaw = entryRaw + riskDistance;
           exitReason = "SL";
@@ -415,20 +441,17 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
         }
       }
     }
-    // Falls weder TP noch SL innerhalb der max. Dauer erreicht wurden, nutze den Schlusskurs der letzten Candle des Betrachtungszeitraums
     if (exitRaw === null) {
       exitRaw = candles[Math.min(i + maxDuration, candles.length - 1)].close;
-      exitReason = "NoTP/SL";
+      exitReason = "EndOfPeriod";
       durationCandles = Math.min(maxDuration, candles.length - i - 1);
     }
-    
     const profitRaw = signal === "BUY" ? exitRaw - entryRaw : entryRaw - exitRaw;
     const profitPips = profitRaw / (pipMultiplier * factor);
-    
     const entryNorm = normalizePrice(symbol, entryRaw);
     const exitNorm = normalizePrice(symbol, exitRaw);
     const profitPct = ((exitNorm - entryNorm) / entryNorm) * 100;
-    
+
     trades.push({
       signal,
       entry: entryRaw,
@@ -440,21 +463,20 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
       profitPips,
       durationCandles,
       exitReason,
-      rrRatio: expectedRR.toFixed(2)
+      rrRatio: expectedRR.toFixed(2),
     });
     equity += profitRaw;
     equityCurve.push(equity);
   }
-  
+
   const totalTrades = trades.length;
-  const wins = trades.filter(t => t.profit > 0).length;
+  const wins = trades.filter((t) => t.profit > 0).length;
   const losses = totalTrades - wins;
   const totalProfit = equity - initialCapital;
   const totalProfitPct = (totalProfit / initialCapital) * 100;
   const avgProfit = totalTrades ? totalProfit / totalTrades : 0;
   const avgProfitPct = totalTrades ? totalProfitPct / totalTrades : 0;
-  
-  // Berechne maximalen Drawdown
+
   let maxDrawdown = 0;
   let peak = equityCurve[0] || initialCapital;
   for (let value of equityCurve) {
@@ -463,10 +485,9 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
     if (drawdown > maxDrawdown) maxDrawdown = drawdown;
   }
   const maxDrawdownPct = (maxDrawdown / initialCapital) * 100;
-  
   const avgDuration = totalTrades ? trades.reduce((sum, t) => sum + t.durationCandles, 0) / totalTrades : 0;
   const avgRR = totalTrades ? trades.reduce((sum, t) => sum + parseFloat(t.rrRatio), 0) / totalTrades : 0;
-  
+
   console.log(`Backtesting Ergebnisse für ${symbol}:`);
   console.log(`Trades: ${totalTrades}, Wins: ${wins} (${((wins / totalTrades) * 100).toFixed(2)}%), Losses: ${losses}`);
   console.log(`Total Profit: ${totalProfit.toFixed(2)} (${totalProfitPct.toFixed(2)}%)`);
@@ -476,7 +497,7 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
   console.log(`Average RR Ratio: ${avgRR.toFixed(2)}`);
   console.log("Detailed Trades Sample:", trades.slice(0, 10));
   console.log("Equity Curve (letzte 10 Werte):", equityCurve.slice(-10));
-  
+
   return {
     totalTrades,
     wins,
@@ -494,15 +515,11 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
   };
 }
 
-
 const test = async () => {
   const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
-  // const endTimestamp = Math.floor(Date.now() / 1000);
   const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
-  // console.log("endTimestamp:", endTimestamp);
-
-  const backtestResult = await backtestStrategy(CONFIG.symbols.EURUSD, CONFIG.timeframe.M5, startTimestamp, endTimestamp);
-  // console.log("Backtesting Result:", backtestResult);
+  const backtestResult = await backtestStrategy(CONFIG.symbols.GBPUSD, CONFIG.timeframe.M5, startTimestamp, endTimestamp);
+  // Hier kannst du das Backtesting-Ergebnis weiter analysieren
 };
 
 // --- Main function ---
