@@ -459,3 +459,28 @@ async function backtestStrategy(symbol, timeframe, startTimestamp, endTimestamp)
     equityCurve,
   };
 }
+
+
+const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) => {
+  const candles = await getHistoricalData(symbol, timeframe);
+  if (candles.length === 0) {
+    console.error(`No data for ${symbol}`);
+    return null;
+  }
+  const closes = candles.map((c) => c.close);
+  const emaFast = calculateEMA(closes, fastPeriod);
+  const emaSlow = calculateEMA(closes, slowPeriod);
+  const lastPrice = closes[closes.length - 1];
+
+  const recentCloses = closes.slice(-50);
+  const macdData = calculateMACD(recentCloses);
+  const rsiValue = calculateRSI(recentCloses);
+
+  if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
+    return { signal: "BUY", rawPrice: lastPrice };
+  } else if (emaFast < emaSlow && macdData.histogram < 0 && rsiValue > 30) {
+    return { signal: "SELL", rawPrice: lastPrice };
+  } else {
+    return null;
+  }
+};
