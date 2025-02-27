@@ -6,34 +6,34 @@ const CONFIG = {
   symbols: {
     EURUSD: "EURUSD",
     GBPUSD: "GBPUSD",
-    // USDJPY: "USDJPY",
     AUDUSD: "AUDUSD",
     EURGBP: "EURGBP",
   },
   timeframe: {
     M1: 1,
-    M5: 5,
-    M15: 15,
-    H1: 60,
-    H4: 240,
-    D1: 1440,
+    // Weitere Timeframes können für Backtesting genutzt werden
   },
-  fastMA: 5, // EMA-Schnellperiode
-  slowMA: 20, // EMA-Langperiode
+  fastEMA: 8, // Schneller EMA (für Pullback und Einstieg)
+  slowEMA: 21, // Langsamer EMA (Trendfilter)
   macdShort: 12,
   macdLong: 26,
   macdSignal: 9,
   rsiPeriod: 14,
-  stopLossPips: 5, // Feste Stop-Loss-Pips als Fallback (bei fehlender ATR-Berechnung)
+  // Neue RSI-Schwellen
+  rsiBuyThreshold: 30, // LONG: RSI < 30
+  rsiSellThreshold: 70, // SHORT: RSI > 70
+  stopLossPips: 5, // Feste Stop-Loss-Pips als Fallback
   takeProfitPips: 10, // Feste Take-Profit-Pips als Fallback
   riskPerTrade: 0.02, // 2% Risiko pro Trade
-  // Dynamische SL/TP: Multiplikatoren für ATR-basierte Berechnung
+  // Dynamische SL/TP via ATR
   atrMultiplierSL: 1.5,
   atrMultiplierTP: 2.0,
+  // Pullback-Bedingung: Maximal erlaubte Abweichung zum schnellen EMA (z.B. 0,30%)
+  maxDistancePct: 0.003,
   // Backtesting-Parameter
-  maxTradeDurationCandles: 10, // maximal betrachtete Candles für einen Trade
-  maxDrawdownPctLimit: 20, // Erhöht auf 20% des Startkapitals
-  minRR: 2.0, // Mindest-Erwartungs-RR, damit ein Trade berücksichtigt wird
+  maxTradeDurationCandles: 10,
+  maxDrawdownPctLimit: 20,
+  minRR: 2.0,
 };
 
 // Globales Handling von unhandledRejections
@@ -119,11 +119,7 @@ const calculateATR = (candles, period = 14) => {
 const calculateDynamicSLTP = (entryRaw, atr, isBuy) => {
   const slDistance = atr * CONFIG.atrMultiplierSL;
   const tpDistance = atr * CONFIG.atrMultiplierTP;
-  if (isBuy) {
-    return { sl: entryRaw - slDistance, tp: entryRaw + tpDistance };
-  } else {
-    return { sl: entryRaw + slDistance, tp: entryRaw - tpDistance };
-  }
+  return isBuy ? { sl: entryRaw - slDistance, tp: entryRaw + tpDistance } : { sl: entryRaw + slDistance, tp: entryRaw - tpDistance };
 };
 
 // --- Verbindung & Datenabruf ---
@@ -187,12 +183,9 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   const distancePct = Math.abs(lastPrice - fastEMA) / fastEMA;
   const rsi = calculateRSI(closes.slice(-50));
 
-  // LONG-Bedingung
-  if (fastEMA > slowEMA && distancePct < 0.001 && rsi < CONFIG.rsiBuyThreshold) {
+  if (fastEMA > slowEMA && distancePct < CONFIG.maxDistancePct && rsi < CONFIG.rsiBuyThreshold) {
     return { signal: "BUY", rawPrice: lastPrice };
-  }
-  // SHORT-Bedingung
-  else if (fastEMA < slowEMA && distancePct < 0.001 && rsi > CONFIG.rsiSellThreshold) {
+  } else if (fastEMA < slowEMA && distancePct < CONFIG.maxDistancePct && rsi > CONFIG.rsiSellThreshold) {
     return { signal: "SELL", rawPrice: lastPrice };
   } else {
     return null;
@@ -216,15 +209,30 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
 //   return null;
 // };
 
+// Multi-Timeframe-Analyse: Zusätzlich wird der H1-Trend (als Filter) geprüft
 const checkMultiTimeframeSignal = async (symbol) => {
-  const signal = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastEMA, CONFIG.slowEMA);
-  if (!signal) {
-    console.error(`Not enough data or no valid signal for ${symbol}`);
+  const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastEMA, CONFIG.slowEMA);
+  if (!signalM1) {
+    console.error(`Not enough data or no valid signal for ${symbol} on M1`);
     return null;
   }
-  return signal;
+  // H1 Trendfilter:
+  const h1Candles = await getHistoricalData(symbol, CONFIG.timeframe.H1);
+  if (!h1Candles.length) {
+    console.error(`No H1 data for ${symbol}`);
+    return null;
+  }
+  const h1Closes = h1Candles.map((c) => c.close);
+  const h1FastEMA = calculateEMA(h1Closes, CONFIG.fastEMA);
+  const h1SlowEMA = calculateEMA(h1Closes, CONFIG.slowEMA);
+  const h1Trend = h1FastEMA > h1SlowEMA ? "BUY" : "SELL";
+  // Nur wenn H1-Trend mit M1-Signal übereinstimmt, wird das Signal weitergegeben
+  if (signalM1.signal === h1Trend) {
+    return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+  }
+  console.error(`H1 Trend (${h1Trend}) widerspricht dem M1 Signal für ${symbol}`);
+  return null;
 };
-
 // --- Orderausführung ---
 // Nutzt den normalisierten Preis, um Entry, SL und TP zu berechnen.
 const executeTradeForSymbol = async (symbol, direction, rawPrice, lotSize) => {
@@ -394,17 +402,17 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     }
     const slice = candles.slice(0, i + 1);
     const closes = slice.map((c) => c.close);
-    const emaFast = calculateEMA(closes, CONFIG.fastMA);
-    const emaSlow = calculateEMA(closes, CONFIG.slowMA);
+    const fastEMA = calculateEMA(closes, CONFIG.fastEMA);
+    const slowEMA = calculateEMA(closes, CONFIG.slowEMA);
     const recentCloses = closes.slice(-50);
     const macdData = calculateMACD(recentCloses);
     const rsiValue = calculateRSI(recentCloses);
     const entryRaw = closes[closes.length - 1];
 
     let signal = null;
-    if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
+    if (fastEMA > slowEMA && macdData.histogram > 0 && rsiValue < 70) {
       signal = "BUY";
-    } else if (emaFast < emaSlow && macdData.histogram < 0 && rsiValue > 30) {
+    } else if (fastEMA < slowEMA && macdData.histogram < 0 && rsiValue > 30) {
       signal = "SELL";
     }
     if (!signal) continue;
@@ -515,11 +523,18 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     equityCurve,
   };
 };
+// --- Backtesting für alle Paare ---
+// Diese Funktion iteriert über alle in CONFIG.symbols definierten Paare
 const test = async () => {
   const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
   const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
-  const backtestResult = await backtestStrategy(CONFIG.symbols.GBPUSD, CONFIG.timeframe.M5, startTimestamp, endTimestamp);
-  // Hier kannst Du das Backtesting-Ergebnis weiter analysieren
+  let allResults = {};
+  for (let symbol of Object.values(CONFIG.symbols)) {
+    console.log(`\n======================\nBacktesting für ${symbol}`);
+    const result = await backtestStrategy(symbol, CONFIG.timeframe.M5, startTimestamp, endTimestamp);
+    allResults[symbol] = result;
+  }
+  return allResults;
 };
 
 // --- Main function ---
@@ -556,10 +571,10 @@ const startBot = async () => {
       }
     });
 
-    test();
-    // setInterval(async () => {
-    //   await checkAllPairsAndTrade();
-    // }, 60000);
+    // test();
+    setInterval(async () => {
+      await checkAllPairsAndTrade();
+    }, 60000);
 
     console.log("Bot läuft...");
   } catch (error) {
