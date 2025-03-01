@@ -1,11 +1,18 @@
+// indicators.js
+const CONFIG = {
+  macdShort: 12,
+  macdLong: 26,
+  macdSignal: 9,
+  rsiPeriod: 14,
+};
 // Einfacher gleitender Durchschnitt
-function calculateSMA(prices, period) {
+const calculateSMA = (prices, period) => {
   if (prices.length < period) return null;
   return prices.slice(-period).reduce((sum, price) => sum + price, 0) / period;
-}
+};
 
 // Exponentieller gleitender Durchschnitt
-function calculateEMA(prices, period) {
+const calculateEMA = (prices, period) => {
   if (prices.length < period) return null;
   const k = 2 / (period + 1);
   let ema = calculateSMA(prices.slice(0, period), period);
@@ -13,10 +20,10 @@ function calculateEMA(prices, period) {
     ema = prices[i] * k + ema * (1 - k);
   }
   return ema;
-}
+};
 
 // MACD-Berechnung (Standard: 12, 26, 9)
-function calculateMACD(prices, shortPeriod = CONFIG.macdShort, longPeriod = CONFIG.macdLong, signalPeriod = CONFIG.macdSignal) {
+const calculateMACD = (prices, shortPeriod = CONFIG.macdShort, longPeriod = CONFIG.macdLong, signalPeriod = CONFIG.macdSignal) => {
   let macdValues = [];
   for (let i = longPeriod - 1; i < prices.length; i++) {
     const shortSlice = prices.slice(i - shortPeriod + 1, i + 1);
@@ -28,10 +35,10 @@ function calculateMACD(prices, shortPeriod = CONFIG.macdShort, longPeriod = CONF
   const signalLine = calculateEMA(macdValues, signalPeriod);
   const histogram = macdValues[macdValues.length - 1] - signalLine;
   return { macdLine: macdValues[macdValues.length - 1], signalLine, histogram };
-}
+};
 
 // RSI-Berechnung (Standardperiode 14)
-function calculateRSI(prices, period = CONFIG.rsiPeriod) {
+const calculateRSI = (prices, period = CONFIG.rsiPeriod) => {
   if (prices.length < period + 1) return null;
   let gains = 0,
     losses = 0;
@@ -45,10 +52,10 @@ function calculateRSI(prices, period = CONFIG.rsiPeriod) {
   if (avgLoss === 0) return 100;
   const rs = avgGain / avgLoss;
   return 100 - 100 / (1 + rs);
-}
+};
 
 // ATR-Berechnung (Average True Range, Standardperiode 14)
-function calculateATR(candles, period = 14) {
+const calculateATR = (candles, period = 14) => {
   if (candles.length < period + 1) return null;
   let trs = [];
   for (let i = 1; i < candles.length; i++) {
@@ -59,18 +66,6 @@ function calculateATR(candles, period = 14) {
     trs.push(tr);
   }
   return calculateSMA(trs, period);
-}
+};
 
-// Beispiel: Dynamische SL/TP-Berechnung mit ATR
-function calculateDynamicSLTP(entryRaw, atr, isBuy) {
-  const slDistance = atr * CONFIG.atrMultiplierSL;
-  const tpDistance = atr * CONFIG.atrMultiplierTP;
-  if (isBuy) {
-    return { sl: entryRaw - slDistance, tp: entryRaw + tpDistance };
-  } else {
-    return { sl: entryRaw + slDistance, tp: entryRaw - tpDistance };
-  }
-}
-module.exports = { calculateSMA, calculateEMA, normalizePrice, getPipMultiplier };
-
-
+module.exports = { calculateSMA, calculateEMA, calculateMACD, calculateRSI, calculateATR };

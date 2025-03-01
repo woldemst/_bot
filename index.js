@@ -1,5 +1,6 @@
 require("dotenv").config();
 const XAPI = require("xapi-node").default;
+const { calculateSMA, calculateEMA, calculateMACD, calculateRSI, calculateATR } = require("./indicators");
 
 // 1. Configuration
 const CONFIG = {
@@ -28,8 +29,8 @@ const CONFIG = {
   // Dynamische SL/TP via ATR
   atrMultiplierSL: 1.5,
   atrMultiplierTP: 2.0,
-  // Pullback-Bedingung: Maximal erlaubte Abweichung zum schnellen EMA (z.B. 0,30%)
-  maxDistancePct: 0.003,
+  // Pullback-Bedingung: Maximal erlaubte Abweichung zum schnellen EMA (z.B. 0,25%)
+  maxDistancePct: 0.0025,
   // Backtesting-Parameter
   maxTradeDurationCandles: 10,
   maxDrawdownPctLimit: 20,
@@ -52,69 +53,6 @@ const socketId = x.Socket.getSocketId();
 let currentBalance = null; // Wird über den Balance-Stream aktualisiert
 let currentTrades = []; // Wird über den Trade-Stream aktualisiert
 
-// Einfacher gleitender Durchschnitt
-const calculateSMA = (prices, period) => {
-  if (prices.length < period) return null;
-  return prices.slice(-period).reduce((sum, price) => sum + price, 0) / period;
-};
-
-// Exponentieller gleitender Durchschnitt
-const calculateEMA = (prices, period) => {
-  if (prices.length < period) return null;
-  const k = 2 / (period + 1);
-  let ema = calculateSMA(prices.slice(0, period), period);
-  for (let i = period; i < prices.length; i++) {
-    ema = prices[i] * k + ema * (1 - k);
-  }
-  return ema;
-};
-
-// MACD-Berechnung (Standard: 12, 26, 9)
-const calculateMACD = (prices, shortPeriod = CONFIG.macdShort, longPeriod = CONFIG.macdLong, signalPeriod = CONFIG.macdSignal) => {
-  let macdValues = [];
-  for (let i = longPeriod - 1; i < prices.length; i++) {
-    const shortSlice = prices.slice(i - shortPeriod + 1, i + 1);
-    const longSlice = prices.slice(i - longPeriod + 1, i + 1);
-    const emaShort = calculateEMA(shortSlice, shortPeriod);
-    const emaLong = calculateEMA(longSlice, longPeriod);
-    macdValues.push(emaShort - emaLong);
-  }
-  const signalLine = calculateEMA(macdValues, signalPeriod);
-  const histogram = macdValues[macdValues.length - 1] - signalLine;
-  return { macdLine: macdValues[macdValues.length - 1], signalLine, histogram };
-};
-
-// RSI-Berechnung (Standardperiode 14)
-const calculateRSI = (prices, period = CONFIG.rsiPeriod) => {
-  if (prices.length < period + 1) return null;
-  let gains = 0,
-    losses = 0;
-  for (let i = 1; i <= period; i++) {
-    const change = prices[i] - prices[i - 1];
-    if (change > 0) gains += change;
-    else losses -= change;
-  }
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
-};
-
-// ATR-Berechnung (Average True Range, Standardperiode 14)
-const calculateATR = (candles, period = 14) => {
-  if (candles.length < period + 1) return null;
-  let trs = [];
-  for (let i = 1; i < candles.length; i++) {
-    const high = candles[i].high;
-    const low = candles[i].low;
-    const prevClose = candles[i - 1].close;
-    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
-    trs.push(tr);
-  }
-  return calculateSMA(trs, period);
-};
-
 // Dynamische SL/TP-Berechnung mit ATR
 const calculateDynamicSLTP = (entryRaw, atr, isBuy) => {
   const slDistance = atr * CONFIG.atrMultiplierSL;
@@ -130,6 +68,31 @@ const connect = async () => {
   } catch (error) {
     console.error("Error:", error);
     throw error;
+  }
+};
+
+// const getAccountBalance = async () => {
+//   if (currentBalance !== null) {
+//     return currentBalance;
+//   } else {
+//     console.error("Balance noch nicht verfügbar!");
+//     return null;
+//   }
+// };
+
+const getAccountBalance = async () => {
+  try {
+    x.Stream.listen.getBalance((data) => {
+      if (data && data.balance !== undefined) {
+        currentBalance = data.balance;
+        console.log("Balance updated:", currentBalance);
+      } else {
+        console.error("Ungültige Balance-Daten:", data);
+      }
+    });
+  } catch (err) {
+    console.error("Error getting account balance:", err);
+    return null;
   }
 };
 
@@ -168,7 +131,6 @@ const calculatePositionSize = (accountBalance, riskPerTrade, stopLossPips, symbo
 };
 
 // --- Signal-Generierung ---
-
 // Prüft das Handelssignal basierend auf EMA, MACD und RSI
 const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) => {
   const candles = await getHistoricalData(symbol, timeframe);
@@ -327,16 +289,16 @@ async function checkAndTradeForSymbol(symbol) {
     return;
   }
   console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
-  const openPositionsForSymbol = await getOpenPositionsForSymbol(symbol);
-  if (openPositionsForSymbol >= 1) {
-    console.log(`Trade for ${symbol} is already open. Skipping new trade.`);
-    return;
-  }
-  const openPositions = await getOpenPositionsCount();
-  if (openPositions >= 5) {
-    console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
-    return;
-  }
+  // const openPositionsForSymbol = await getOpenPositionsForSymbol(symbol);
+  // if (openPositionsForSymbol >= 1) {
+  //   console.log(`Trade for ${symbol} is already open. Skipping new trade.`);
+  //   return;
+  // }
+  // const openPositions = await getOpenPositionsCount();
+  // if (openPositions >= 5) {
+  //   console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
+  //   return;
+  // }
   const currentRawPrice = await getCurrentPrice(symbol);
   console.log(`Current market price for ${symbol}: ${currentRawPrice}`);
   const balance = await getAccountBalance();
@@ -382,7 +344,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
 
   let trades = [];
   let equityCurve = [];
-  let equity = 1000; // Startkapital
+  let equity = 500; // Startkapital
   const initialCapital = equity;
 
   const factor = symbol.includes("JPY") ? 1000 : 100000;
@@ -504,8 +466,9 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
   console.log(`Average Trade Duration (Candles): ${avgDuration.toFixed(2)}`);
   console.log(`Average RR Ratio: ${avgRR.toFixed(2)}`);
   console.log("Detailed Trades Sample:", trades.slice(0, 10));
-  // console.log("Equity Curve (letzte 10 Werte):", equityCurve.slice(-10));
-  console.log("Equity Curve (letzte 10 Werte):", equityCurve);
+
+  console.log("Equity Curve (letzte 10 Werte):", equityCurve.slice(10));
+  // console.log("Equity Curve (letzte 10 Werte):", equityCurve);
 
   return {
     totalTrades,
@@ -523,18 +486,23 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     equityCurve,
   };
 };
+
 // --- Backtesting für alle Paare ---
-// Diese Funktion iteriert über alle in CONFIG.symbols definierten Paare
 const test = async () => {
   const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
   const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
-  let allResults = {};
-  for (let symbol of Object.values(CONFIG.symbols)) {
-    console.log(`\n======================\nBacktesting für ${symbol}`);
-    const result = await backtestStrategy(symbol, CONFIG.timeframe.M5, startTimestamp, endTimestamp);
-    allResults[symbol] = result;
-  }
-  return allResults;
+  const result = await backtestStrategy(CONFIG.symbols.AUDUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
+
+  // console.log("Backtesting results:", result);
+
+  // let allResults = {};
+  // for (let symbol of Object.values(CONFIG.symbols)) {
+  //   console.log(`\n======================\nBacktesting für ${symbol}`);
+
+  //   const result = await backtestStrategy(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
+  //   allResults[symbol] = result;
+  // }
+  // return allResults;
 };
 
 // --- Main function ---
@@ -553,15 +521,16 @@ const startBot = async () => {
       .then(() => console.log("Trades-Stream abonniert"))
       .catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err));
 
-    // Listener registrieren
-    x.Stream.listen.getBalance((data) => {
-      if (data && data.balance !== undefined) {
-        currentBalance = data.balance;
-        console.log("Balance updated:", currentBalance);
-      } else {
-        console.error("Ungültige Balance-Daten:", data);
-      }
-    });
+    // // Listener registrieren
+    // x.Stream.listen.getBalance((data) => {
+    //   if (data && data.balance !== undefined) {
+    //     currentBalance = data.balance;
+    //     console.log("Balance updated:", currentBalance);
+    //   } else {
+    //     console.error("Ungültige Balance-Daten:", data);
+    //   }
+    // });
+    await getAccountBalance();
 
     x.Stream.listen.getTrades((data) => {
       if (data) {
@@ -571,10 +540,10 @@ const startBot = async () => {
       }
     });
 
-    // test();
-    setInterval(async () => {
-      await checkAllPairsAndTrade();
-    }, 60000);
+    test();
+    // setInterval(async () => {
+    //   await checkAllPairsAndTrade();
+    // }, 60000);
 
     console.log("Bot läuft...");
   } catch (error) {
