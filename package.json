@@ -12,7 +12,7 @@
   "type": "commonjs",
   "description": "",
   "dependencies": {
-    "axios": "^1.7.9",
+    "axios": "^1.8.1",
     "dotenv": "^16.4.7",
     "nodemon": "^3.1.9",
     "xapi-node": "^3.0.5"
