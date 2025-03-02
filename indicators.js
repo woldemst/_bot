@@ -1,4 +1,4 @@
-// indicators.js
+//indicators.js
 const CONFIG = {
   macdShort: 12,
   macdLong: 26,
