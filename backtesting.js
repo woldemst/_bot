@@ -1,13 +1,45 @@
 // backtesting.js
-const { calculateSMA, calculateEMA, calculateMACD, calculateRSI, calculateATR, normalizePrice, getPipMultiplier } = require('./indicators');
+const { x,  getSocketId } = require("./xapi");
+const { calculateEMA, calculateMACD, calculateRSI } = require("./indicators");
 
-const CONFIG = require('./config');
+const getHistoricalData = async (symbol, timeframe, start, end) => {
+  try {
+    const result = await x.getPriceHistory({ symbol, period: timeframe, start, end, socketId: getSocketId() });
+    return result && result.candles ? result.candles : [];
+  } catch (err) {
+    console.error("Error in getHistoricalData:", err);
+    return [];
+  }
+};
+// 2. Authentifizierung mit XAPI
+// Normalisierungsfunktion: Wandelt Rohpreise in den tatsächlichen Kurs um
+const normalizePrice = (symbol, rawPrice) => {
+  const factor = symbol.includes("JPY") ? 1000 : 100000;
+  return parseFloat((rawPrice / factor).toFixed(5));
+};
 
-async function backtestStrategy(xapi, symbol, timeframe, startTimestamp, endTimestamp) {
+const getPipMultiplier = (symbol) => {
+  return symbol.includes("JPY") ? 0.01 : 0.0001;
+};
+
+const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp) => {
   console.log(`Backtesting ${symbol} from ${new Date(startTimestamp * 1000)} to ${new Date(endTimestamp * 1000)}`);
+
+  // Streams abonnieren
+  x.Stream.subscribe
+    .getBalance()
+    .then(() => console.log("Balance-Stream abonniert"))
+    .catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err));
+  x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed"));
+  x.Stream.subscribe
+    .getTrades()
+    .then(() => console.log("Trades-Stream abonniert"))
+    .catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err));
+
+
   let allData;
   try {
-    allData = await xapi.getPriceHistory({ symbol, period: timeframe, start: startTimestamp, end: endTimestamp });
+    allData = await x.getPriceHistory({ symbol, period: timeframe, start: startTimestamp, end: endTimestamp });
   } catch (err) {
     console.error("Error during getPriceHistory:", err);
     return;
@@ -21,7 +53,7 @@ async function backtestStrategy(xapi, symbol, timeframe, startTimestamp, endTime
 
   let trades = [];
   let equityCurve = [];
-  let equity = 1000; // Startkapital
+  let equity = 500; // Startkapital
   const initialCapital = equity;
 
   const factor = symbol.includes("JPY") ? 1000 : 100000;
@@ -34,7 +66,6 @@ async function backtestStrategy(xapi, symbol, timeframe, startTimestamp, endTime
   const minRR = CONFIG.minRR;
   const maxDuration = CONFIG.maxTradeDurationCandles;
 
-  // Simuliere Trades ab Candle 50 (um genügend Indikator-Daten zu haben)
   for (let i = 50; i < candles.length - 1; i++) {
     if (((initialCapital - equity) / initialCapital) * 100 >= maxDrawdownPctLimit) {
       console.log("Maximaler Drawdown erreicht – keine weiteren Trades simuliert.");
@@ -49,15 +80,10 @@ async function backtestStrategy(xapi, symbol, timeframe, startTimestamp, endTime
     const rsiValue = calculateRSI(recentCloses);
     const entryRaw = closes[closes.length - 1];
 
-    // Hier wird der Pullback-Filter eingebaut:
-    const distancePct = Math.abs(entryRaw - fastEMA) / fastEMA;
-    // Nur einsteigen, wenn der Preis innerhalb eines kleinen Prozentsatzes (maxDistancePct) vom schnellen EMA liegt
-    if (distancePct > CONFIG.maxDistancePct) continue;
-
     let signal = null;
-    if (fastEMA > slowEMA && macdData.histogram > 0 && rsiValue < CONFIG.rsiBuyThreshold) {
+    if (fastEMA > slowEMA && macdData.histogram > 0 && rsiValue < 70) {
       signal = "BUY";
-    } else if (fastEMA < slowEMA && macdData.histogram < 0 && rsiValue > CONFIG.rsiSellThreshold) {
+    } else if (fastEMA < slowEMA && macdData.histogram < 0 && rsiValue > 30) {
       signal = "SELL";
     }
     if (!signal) continue;
@@ -149,7 +175,9 @@ async function backtestStrategy(xapi, symbol, timeframe, startTimestamp, endTime
   console.log(`Average Trade Duration (Candles): ${avgDuration.toFixed(2)}`);
   console.log(`Average RR Ratio: ${avgRR.toFixed(2)}`);
   console.log("Detailed Trades Sample:", trades.slice(0, 10));
-  console.log("Equity Curve:", equityCurve);
+
+  console.log("Equity Curve (letzte 10 Werte):", equityCurve.slice(10));
+  // console.log("Equity Curve (letzte 10 Werte):", equityCurve);
 
   return {
     totalTrades,
@@ -168,4 +196,4 @@ async function backtestStrategy(xapi, symbol, timeframe, startTimestamp, endTime
   };
 };
 
-// module.exports = { backtestStrategy };
+module.exports = { backtestStrategy };
