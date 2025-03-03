@@ -1,6 +1,7 @@
 // backtesting.js
 const { x,  getSocketId } = require("./xapi");
 const { calculateEMA, calculateMACD, calculateRSI } = require("./indicators");
+const { CONFIG } = require("./config");
 
 const getHistoricalData = async (symbol, timeframe, start, end) => {
   try {

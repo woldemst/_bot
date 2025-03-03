@@ -1,9 +1,9 @@
 require("dotenv").config();
-const { x, connectXAPI, getSocketId } = require("xapi-node").default;
+const { x, connectXAPI, getSocketId } = require("./xapi.js");
+
 const { calculateSMA, calculateEMA, calculateMACD, calculateRSI, calculateATR } = require("./indicators");
 const { backtestStrategy } = require("./backtesting");
-const CONFIG = require("./config");
-
+const { CONFIG } = require("./config");
 
 // Globales Handling von unhandledRejections
 process.on("unhandledRejection", (reason, promise) => {
