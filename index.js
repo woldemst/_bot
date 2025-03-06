@@ -1,7 +1,7 @@
 require("dotenv").config();
 const { x, connectXAPI, getSocketId } = require("./xapi.js");
 
-const { calculateSMA, calculateEMA, calculateMACD, calculateRSI, calculateATR } = require("./indicators");
+const { calculateSMA, calculateEMA, calculateMACD, calculateRSI, calculateATR, calculateBollingerBands } = require("./indicators");
 const { backtestStrategy } = require("./backtesting");
 const { CONFIG } = require("./config");
 
@@ -89,7 +89,7 @@ const calculatePositionSize = (accountBalance, riskPerTrade, stopLossPips, symbo
 };
 
 // --- Signal-Generierung ---
-// Prüft das Handelssignal basierend auf EMA, MACD und RSI
+// Prüft das Handelssignal basierend auf EMA, Bollinger-Bändern und ATR
 const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) => {
   const candles = await getHistoricalData(symbol, timeframe);
   if (!candles.length) {
@@ -99,35 +99,21 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   const closes = candles.map((c) => c.close);
   const fastEMA = calculateEMA(closes, fastPeriod);
   const slowEMA = calculateEMA(closes, slowPeriod);
+  // Berechnung der Bollinger-Bänder
+  const bb = calculateBollingerBands(closes, CONFIG.bbPeriod, CONFIG.bbMultiplier);
   const lastPrice = closes[closes.length - 1];
-  const distancePct = Math.abs(lastPrice - fastEMA) / fastEMA;
-  const rsi = calculateRSI(closes.slice(-50));
 
-  if (fastEMA > slowEMA && distancePct < CONFIG.maxDistancePct && rsi < CONFIG.rsiBuyThreshold) {
+  // Strategie:
+  // Long: Aufwärts-Trend (fastEMA > slowEMA) und der Kurs liegt am oder unterhalb des unteren Bollinger-Bandes.
+  // Short: Abwärts-Trend (fastEMA < slowEMA) und der Kurs liegt am oder oberhalb des oberen Bollinger-Bandes.
+  if (fastEMA > slowEMA && lastPrice <= bb.lowerBand) {
     return { signal: "BUY", rawPrice: lastPrice };
-  } else if (fastEMA < slowEMA && distancePct < CONFIG.maxDistancePct && rsi > CONFIG.rsiSellThreshold) {
+  } else if (fastEMA < slowEMA && lastPrice >= bb.upperBand) {
     return { signal: "SELL", rawPrice: lastPrice };
   } else {
     return null;
   }
 };
-
-// Multi-Timeframe-Analyse: Prüft die Signale in M1, M15 und H1
-// const checkMultiTimeframeSignal = async (symbol) => {
-//   const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastMA, CONFIG.slowMA);
-//   const signalM15 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M15, CONFIG.fastMA, CONFIG.slowMA);
-//   const signalH1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.H1, CONFIG.fastMA, CONFIG.slowMA);
-
-//   // if (!signalM1 || !signalM15 || !signalH1) {
-//   if (!signalM1 || !signalM15) {
-//     console.error(`Not enough data for ${symbol}`);
-//     return null;
-//   }
-//   if (signalM1.signal === signalM15.signal && signalM15.signal === signalH1.signal) {
-//     return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
-//   }
-//   return null;
-// };
 
 // Multi-Timeframe-Analyse: Zusätzlich wird der H1-Trend (als Filter) geprüft
 const checkMultiTimeframeSignal = async (symbol) => {
@@ -146,13 +132,13 @@ const checkMultiTimeframeSignal = async (symbol) => {
   const h1FastEMA = calculateEMA(h1Closes, CONFIG.fastEMA);
   const h1SlowEMA = calculateEMA(h1Closes, CONFIG.slowEMA);
   const h1Trend = h1FastEMA > h1SlowEMA ? "BUY" : "SELL";
-  // Nur wenn H1-Trend mit M1-Signal übereinstimmt, wird das Signal weitergegeben
   if (signalM1.signal === h1Trend) {
     return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
   }
   console.error(`H1 Trend (${h1Trend}) widerspricht dem M1 Signal für ${symbol}`);
   return null;
 };
+
 // --- Orderausführung ---
 // Nutzt den normalisierten Preis, um Entry, SL und TP zu berechnen.
 const executeTradeForSymbol = async (symbol, direction, rawPrice, lotSize) => {
@@ -283,28 +269,28 @@ const tick = async () => {
   x.Stream.listen.getTickPrices((data) => {
     console.log("gotten:", data);
     return data;
-  });
+  }); n
 };
 
 // --- Backtesting für alle Paare ---
 const test = async () => {
   const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
   const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
-  const result = await backtestStrategy(CONFIG.symbols.AUDUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
+  const result = await backtestStrategy(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
 
-  // console.log("Backtesting results:", result);
+  console.log("Backtesting results:", result);
 
   // let allResults = {};
   // for (let symbol of Object.values(CONFIG.symbols)) {
   //   console.log(`\n======================\nBacktesting für ${symbol}`);
 
-  //   const result = await backtestStrategy(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
+  //   const result = await backtestStrategy(symbol, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
   //   allResults[symbol] = result;
   // }
   // return allResults;
 };
 
-// --- Main function ---
+// --- Main function --- //
 const startBot = async () => {
   try {
     await connectXAPI();
