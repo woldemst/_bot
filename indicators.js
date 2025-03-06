@@ -1,17 +1,16 @@
-//indicators.js
+// indicators.js
 const CONFIG = {
   macdShort: 12,
   macdLong: 26,
   macdSignal: 9,
   rsiPeriod: 14,
 };
-// Einfacher gleitender Durchschnitt
+
 const calculateSMA = (prices, period) => {
   if (prices.length < period) return null;
   return prices.slice(-period).reduce((sum, price) => sum + price, 0) / period;
 };
 
-// Exponentieller gleitender Durchschnitt
 const calculateEMA = (prices, period) => {
   if (prices.length < period) return null;
   const k = 2 / (period + 1);
@@ -22,7 +21,6 @@ const calculateEMA = (prices, period) => {
   return ema;
 };
 
-// MACD-Berechnung (Standard: 12, 26, 9)
 const calculateMACD = (prices, shortPeriod = CONFIG.macdShort, longPeriod = CONFIG.macdLong, signalPeriod = CONFIG.macdSignal) => {
   let macdValues = [];
   for (let i = longPeriod - 1; i < prices.length; i++) {
@@ -37,7 +35,6 @@ const calculateMACD = (prices, shortPeriod = CONFIG.macdShort, longPeriod = CONF
   return { macdLine: macdValues[macdValues.length - 1], signalLine, histogram };
 };
 
-// RSI-Berechnung (Standardperiode 14)
 const calculateRSI = (prices, period = CONFIG.rsiPeriod) => {
   if (prices.length < period + 1) return null;
   let gains = 0,
@@ -54,7 +51,6 @@ const calculateRSI = (prices, period = CONFIG.rsiPeriod) => {
   return 100 - 100 / (1 + rs);
 };
 
-// ATR-Berechnung (Average True Range, Standardperiode 14)
 const calculateATR = (candles, period = 14) => {
   if (candles.length < period + 1) return null;
   let trs = [];
@@ -68,4 +64,23 @@ const calculateATR = (candles, period = 14) => {
   return calculateSMA(trs, period);
 };
 
-module.exports = { calculateSMA, calculateEMA, calculateMACD, calculateRSI, calculateATR };
+const calculateBollingerBands = (prices, period, multiplier) => {
+  if (prices.length < period) return null;
+  const sma = calculateSMA(prices, period);
+  const slice = prices.slice(-period);
+  const squaredDiffs = slice.map((price) => Math.pow(price - sma, 2));
+  const variance = calculateSMA(squaredDiffs, period);
+  const stdDev = Math.sqrt(variance);
+  const upperBand = sma + multiplier * stdDev;
+  const lowerBand = sma - multiplier * stdDev;
+  return { sma, upperBand, lowerBand };
+};
+
+module.exports = {
+  calculateSMA,
+  calculateEMA,
+  calculateMACD,
+  calculateRSI,
+  calculateATR,
+  calculateBollingerBands,
+};

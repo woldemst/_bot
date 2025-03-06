@@ -1,4 +1,4 @@
-// 1. Configuration
+// config.js
 const CONFIG = {
   symbols: {
     EURUSD: "EURUSD",
@@ -10,22 +10,27 @@ const CONFIG = {
     M1: 1,
     // Weitere Timeframes können für Backtesting genutzt werden
   },
-  fastEMA: 8, // Schneller EMA (für Pullback und Einstieg)
-  slowEMA: 21, // Langsamer EMA (Trendfilter)
+  // Indikatorparameter
+  fastEMA: 8,        // Schneller EMA (Einstieg/Pullback)
+  slowEMA: 21,       // Langsamer EMA (Trendfilter)
   macdShort: 12,
   macdLong: 26,
   macdSignal: 9,
   rsiPeriod: 14,
-  // Neue RSI-Schwellen
-  rsiBuyThreshold: 30, // LONG: RSI < 30
-  rsiSellThreshold: 70, // SHORT: RSI > 70
-  stopLossPips: 5, // Feste Stop-Loss-Pips als Fallback
-  takeProfitPips: 10, // Feste Take-Profit-Pips als Fallback
+  // RSI-Schwellen (optional, hier als zusätzlicher Filter)
+  rsiBuyThreshold: 30,   // LONG: RSI < 30
+  rsiSellThreshold: 70,  // SHORT: RSI > 70
+  // Feste SL/TP als Fallback
+  stopLossPips: 5,
+  takeProfitPips: 10,
   riskPerTrade: 0.02, // 2% Risiko pro Trade
   // Dynamische SL/TP via ATR
   atrMultiplierSL: 1.5,
   atrMultiplierTP: 2.0,
-  // Pullback-Bedingung: Maximal erlaubte Abweichung zum schnellen EMA (z.B. 0,25%)
+  // Bollinger-Band-Parameter (für erweiterte Strategie)
+  bbPeriod: 20,
+  bbMultiplier: 2,
+  // Pullback: Maximale Abweichung zum schnellen EMA (z.B. 0,25%)
   maxDistancePct: 0.0025,
   // Backtesting-Parameter
   maxTradeDurationCandles: 10,
