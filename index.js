@@ -269,7 +269,8 @@ const tick = async () => {
   x.Stream.listen.getTickPrices((data) => {
     console.log("gotten:", data);
     return data;
-  }); n
+  });
+  n;
 };
 
 // --- Backtesting für alle Paare ---
@@ -278,7 +279,7 @@ const test = async () => {
   const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
   const result = await backtestStrategy(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
 
-  console.log("Backtesting results:", result);
+  // console.log("Backtesting results:", result);
 
   // let allResults = {};
   // for (let symbol of Object.values(CONFIG.symbols)) {
@@ -325,8 +326,13 @@ const startBot = async () => {
     });
 
     test();
+
     // setInterval(async () => {
-    //   await checkAllPairsAndTrade();
+    //   if (isMarketOpen()) {
+    //     await checkAllPairsAndTrade();
+    //   } else {
+    //     console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
+    //   }
     // }, 60000);
 
     console.log("Bot läuft...");
@@ -335,5 +341,10 @@ const startBot = async () => {
     throw error;
   }
 };
-
+const isMarketOpen = () => {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sonntag, 6 = Samstag
+  // Forex-Markt ist in der Regel von Montag (1) bis Freitag (5) offen
+  return day >= 1 && day <= 5;
+};
 startBot();
