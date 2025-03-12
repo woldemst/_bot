@@ -1,3 +1,4 @@
+// index.js
 require("dotenv").config();
 const { x, connectXAPI, getSocketId } = require("./xapi.js");
 
@@ -277,7 +278,7 @@ const tick = async () => {
 const test = async () => {
   const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
   const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
-  const result = await backtestStrategy(CONFIG.symbols.GBPUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
+  const result = await backtestStrategy(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
 
   // console.log("Backtesting results:", result);
 
