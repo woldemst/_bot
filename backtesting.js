@@ -1,21 +1,13 @@
 // backtesting.js
-
 const { x, getSocketId } = require("./xapi");
 const { calculateEMA, calculateMACD } = require("./indicators");
 const { CONFIG } = require("./config");
 
-/**
- * Normalisierungsfunktion: Wandelt Rohpreise in den tatsächlichen Kurs um.
- * Für Nicht‑JPY-Paare wird durch 100000 geteilt (z. B. 103698 → 1.03698).
- */
 const normalizePrice = (symbol, rawPrice) => {
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   return parseFloat((rawPrice / factor).toFixed(5));
 };
 
-/**
- * Liefert den Pip‑Multiplier (0.0001 für die meisten Paare, 0.01 für JPY‑Paare).
- */
 const getPipMultiplier = (symbol) => {
   return symbol.includes("JPY") ? 0.01 : 0.0001;
 };
@@ -162,9 +154,9 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
       signal: signalData.signal,
       entry: entryRaw,
       exit: exitRaw,
-      profit: profitRaw,
-      profitPct,
-      profitPips,
+      profit: parseFloat(profitRaw.toFixed(5)),
+      profitPct: parseFloat(profitPct.toFixed(2)),
+      profitPips: parseFloat(profitPips.toFixed(5)),
       durationCandles,
       exitReason,
       rrRatio: expectedRR.toFixed(2),
