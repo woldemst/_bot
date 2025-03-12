@@ -1,61 +1,47 @@
 // backtesting.js
 
 const { x, getSocketId } = require("./xapi");
-const { calculateEMA, calculateATR } = require("./indicators");
+const { calculateEMA, calculateMACD } = require("./indicators");
 const { CONFIG } = require("./config");
 
-// Normalisierungsfunktion: Wandelt Rohpreise in den tatsächlichen Kurs um
+/**
+ * Normalisierungsfunktion: Wandelt Rohpreise in den tatsächlichen Kurs um.
+ * Für Nicht‑JPY-Paare wird durch 100000 geteilt (z. B. 103698 → 1.03698).
+ */
 const normalizePrice = (symbol, rawPrice) => {
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   return parseFloat((rawPrice / factor).toFixed(5));
 };
 
-// Liefert den Pip‑Multiplier (z.B. 0.0001 für die meisten Paare, 0.01 für JPY-Paare)
+/**
+ * Liefert den Pip‑Multiplier (0.0001 für die meisten Paare, 0.01 für JPY‑Paare).
+ */
 const getPipMultiplier = (symbol) => {
   return symbol.includes("JPY") ? 0.01 : 0.0001;
 };
 
-/**
- * generateSignal – Generiert ein Handelssignal basierend auf dem EMA‑Filter.
- * Hier: Long (BUY), wenn der schnelle EMA über dem langsamen EMA liegt,
- * ansonsten Short (SELL) – rein mathematisch. (Dies ist eine Vereinfachung.)
- *
- * @param {number[]} closes - Array der Rohschlusskurse
- * @param {string} symbol - z.B. "EURUSD"
- * @returns {object|null} - { signal: "BUY"|"SELL", entryRaw } oder null
- */
 const generateSignal = (closes, symbol) => {
-  // Normalisiere die Schlusskurse
-  const normalizedCloses = closes.map(price => normalizePrice(symbol, price));
+  const normalizedCloses = closes.map((price) => price);
+  // console.log('normalizedCloses:', normalizedCloses);
+
   const fastEMA = calculateEMA(normalizedCloses, CONFIG.fastEMA);
   const slowEMA = calculateEMA(normalizedCloses, CONFIG.slowEMA);
+  const macd = calculateMACD(normalizedCloses);
   const entryRaw = normalizedCloses[normalizedCloses.length - 1];
+  // console.log("entryRaw:", entryRaw);
 
-  // Debug-Ausgabe (optional)
-  console.log("normalized fastEMA:", fastEMA, "normalized slowEMA:", slowEMA);
+  // console.log("normalized fastEMA:", fastEMA, "normalized slowEMA:", slowEMA);
 
-  if (fastEMA === null || slowEMA === null) {
-    return null;
-  }
+  if (fastEMA === null || slowEMA === null) return null;
   
-  // Vereinfachte Logik: wenn fastEMA > slowEMA → BUY, sonst SELL
-  if (fastEMA > slowEMA) {
+  if (fastEMA > slowEMA && macd.histogram > 0) {
     return { signal: "BUY", entryRaw };
-  } else if (fastEMA < slowEMA) {
+  } else if (fastEMA < slowEMA && macd.histogram < 0) {
     return { signal: "SELL", entryRaw };
   }
   return null;
 };
 
-/**
- * backtestStrategy – Führt ein Backtesting der Handelsstrategie für das angegebene Symbol über den angegebenen Zeitraum aus.
- *
- * @param {string} symbol - z.B. "EURUSD"
- * @param {number} timeframe - z.B. 1 (M1)
- * @param {number} startTimestamp - Unix-Timestamp Start
- * @param {number} endTimestamp - Unix-Timestamp Ende
- * @returns {object} - Ergebnisobjekt mit Kennzahlen und Trade-Daten
- */
 const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp) => {
   console.log(
     `\nBacktesting ${symbol} von ${new Date(startTimestamp * 1000).toLocaleString()} bis ${new Date(endTimestamp * 1000).toLocaleString()}`
@@ -82,6 +68,13 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
   const candles = allData.candles;
   console.log(`Backtesting: ${candles.length} Candles geladen.`);
 
+  // Normalisiere die relevanten Kerzendaten (close, high, low)
+  candles.forEach((candle) => {
+    candle.close = normalizePrice(symbol, candle.close);
+    candle.high = normalizePrice(symbol, candle.high);
+    candle.low = normalizePrice(symbol, candle.low);
+  });
+
   let trades = [];
   let equityCurve = [];
   let equity = 500; // Startkapital
@@ -89,44 +82,46 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   const pipMultiplier = getPipMultiplier(symbol);
   const maxDrawdownPctLimit = CONFIG.maxDrawdownPctLimit;
-  const maxDuration = CONFIG.maxTradeDurationCandles;
+  const maxDuration = CONFIG.maxTradeDurationCandles; // Feste Trade-Dauer in Candles
 
-  // Starte ab einem Index, der genügend Daten für die Indikatoren liefert (hier ab Index 50)
+  // Starte ab einem Index, an dem genügend Daten vorhanden sind (hier ab Index 50)
   for (let i = 50; i < candles.length - 1; i++) {
-    // Prüfe, ob der maximale Drawdown erreicht wurde
     if (((initialCapital - equity) / initialCapital) * 100 >= maxDrawdownPctLimit) {
       console.log("Maximaler Drawdown erreicht – Backtesting wird gestoppt.");
       break;
     }
 
-    // Betrachte die bisherigen Candles bis Index i
     const slice = candles.slice(0, i + 1);
-    const rawCloses = slice.map(c => c.close);
+    const rawCloses = slice.map((c) => c.close);
 
-    // Generiere Signal basierend auf den normalisierten Schlusskursen
+    // Signal generieren
     const signalData = generateSignal(rawCloses, symbol);
-    // console.log("Signal:", signalData);
     if (!signalData) continue;
     const entryRaw = signalData.entryRaw;
+    // console.log("Signal:", signalData);
 
-    const atr = calculateATR(slice.slice(-15));
-    if (!atr) continue;
-    const riskDistance = atr * CONFIG.atrMultiplierSL;
-    const rewardDistance = atr * CONFIG.atrMultiplierTP;
+    // Für diese vereinfachte Strategie verwenden wir feste SL/TP-Abstände (in Pips)
+    const riskDistance = CONFIG.stopLossPips * getPipMultiplier(symbol);
+    const rewardDistance = CONFIG.takeProfitPips * getPipMultiplier(symbol);
+    // console.log(`Risk Distance: ${riskDistance}, Reward Distance: ${rewardDistance}`);
+
     const expectedRR = rewardDistance / riskDistance;
-    if (expectedRR < CONFIG.minRR) continue;
+    if (expectedRR < CONFIG.minRR) {
+      return;
+    }
 
-    // Suche nach einem Exit-Signal in den nächsten maxDuration Candles
+    // Exit‑Logik: Suche in den nächsten maxDuration Candles nach einem Exit‑Event
     let exitRaw = null;
     let exitReason = null;
     let durationCandles = 0;
     for (let j = i + 1; j < Math.min(i + 1 + maxDuration, candles.length); j++) {
       durationCandles = j - i;
       const candle = candles[j];
-      // Normalisiere die relevanten Werte des Candles
-      const normLow = normalizePrice(symbol, candle.low);
-      const normHigh = normalizePrice(symbol, candle.high);
-      
+      // Nutze die normalisierten Werte (High/Low)
+      const normLow = candle.low;
+      const normHigh = candle.high;
+      // console.log('normal', normLow, normHigh);
+
       if (signalData.signal === "BUY") {
         if (normLow <= entryRaw - riskDistance) {
           exitRaw = entryRaw - riskDistance;
@@ -136,6 +131,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
         if (normHigh >= entryRaw + rewardDistance) {
           exitRaw = entryRaw + rewardDistance;
           exitReason = "TP";
+          // console.log("exit raw", exitRaw, entryRaw, riskDistance);
           break;
         }
       } else if (signalData.signal === "SELL") {
@@ -151,9 +147,9 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
         }
       }
     }
-    // Falls kein Exit-Signal gefunden wurde, verwende den Schlusskurs der letzten Candle im betrachteten Zeitraum
+    // Falls kein Exit innerhalb von maxDuration Candles gefunden wurde:
     if (exitRaw === null) {
-      exitRaw = normalizePrice(symbol, candles[Math.min(i + maxDuration, candles.length - 1)].close);
+      exitRaw = candles[Math.min(i + maxDuration, candles.length - 1)].close;
       exitReason = "EndOfPeriod";
       durationCandles = Math.min(maxDuration, candles.length - i - 1);
     }
@@ -174,12 +170,13 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
       rrRatio: expectedRR.toFixed(2),
     });
     equity += profitRaw;
-    equityCurve.push(equity);
+    equityCurve.push(parseFloat(equity.toFixed(5)));
+
   }
 
-  // Berechne Kennzahlen
+  // Kennzahlen berechnen
   const totalTrades = trades.length;
-  const wins = trades.filter(t => t.profit > 0).length;
+  const wins = trades.filter((t) => t.profit > 0).length;
   const losses = totalTrades - wins;
   const totalProfit = equity - initialCapital;
   const totalProfitPct = (totalProfit / initialCapital) * 100;
