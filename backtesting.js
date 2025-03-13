@@ -89,12 +89,12 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     // Signal generieren
     const signalData = generateSignal(rawCloses, symbol);
     if (!signalData) continue;
-    const entryRaw = signalData.entryRaw;
+    const entryRaw = signalData.entryRaw; 
     // console.log("Signal:", signalData);
 
-    // Für diese vereinfachte Strategie verwenden wir feste SL/TP-Abstände (in Pips)
-    const riskDistance = CONFIG.stopLossPips * getPipMultiplier(symbol);
-    const rewardDistance = CONFIG.takeProfitPips * getPipMultiplier(symbol);
+    // Feste SL/TP-Abstände (in Pips)
+    const riskDistance = CONFIG.stopLossPips * pipMultiplier;
+    const rewardDistance = CONFIG.takeProfitPips * pipMultiplier;
     // console.log(`Risk Distance: ${riskDistance}, Reward Distance: ${rewardDistance}`);
 
     const expectedRR = rewardDistance / riskDistance;
@@ -147,7 +147,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     }
 
     const profitRaw = signalData.signal === "BUY" ? exitRaw - entryRaw : entryRaw - exitRaw;
-    const profitPips = profitRaw / (pipMultiplier * factor);
+    const profitPips = profitRaw / pipMultiplier;
     const profitPct = ((exitRaw - entryRaw) / entryRaw) * 100;
 
     trades.push({
@@ -162,7 +162,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
       rrRatio: expectedRR.toFixed(2),
     });
     equity += profitRaw;
-    equityCurve.push(parseFloat(equity.toFixed(5)));
+    equityCurve.push(parseFloat(equity.toFixed(2)));
 
   }
 

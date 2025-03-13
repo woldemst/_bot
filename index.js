@@ -20,27 +20,21 @@ const calculateDynamicSLTP = (entryRaw, atr, isBuy) => {
   const tpDistance = atr * CONFIG.atrMultiplierTP;
   return isBuy ? { sl: entryRaw - slDistance, tp: entryRaw + tpDistance } : { sl: entryRaw + slDistance, tp: entryRaw - tpDistance };
 };
-
-// const getAccountBalance = async () => {
-//   if (currentBalance !== null) {
-//     return currentBalance;
-//   } else {
-//     console.error("Balance noch nicht verfügbar!");
-//     return null;
-//   }
-// };
-
 const getAccountBalance = async () => {
   try {
-    const balanceData = await x.getBalance();
-    if (balanceData && balanceData.balance !== undefined) {
-      currentBalance = balanceData.balance;
-      console.log("Account balance (direct API):", currentBalance);
-      return currentBalance;
-    } else {
-      console.error("Invalid balance data:", balanceData);
-      return null;
+    // Wenn currentBalance noch nicht gesetzt ist, direkt abfragen:
+    if (currentBalance === null) {
+      const balanceData = await x.Socket.send.getBalance();
+      if (balanceData && balanceData.balance !== undefined) {
+        currentBalance = balanceData.balance;
+        console.log("Account balance (direct API):", currentBalance);
+        return currentBalance;
+      } else {
+        console.error("Invalid balance data:", balanceData);
+        return null;
+      }
     }
+    return currentBalance;
   } catch (err) {
     console.error("Error getting account balance:", err);
     return null;
@@ -55,15 +49,6 @@ const getHistoricalData = async (symbol, timeframe) => {
     return [];
   }
 };
-// const getHistoricalData = async (symbol, timeframe, start, end) => {
-//   try {
-//     const result = await x.getPriceHistory({ symbol, period: timeframe, start, end, socketId: socketId() });
-//     return result && result.candles ? result.candles : [];
-//   } catch (err) {
-//     console.error("Error in getHistoricalData:", err);
-//     return [];
-//   }
-// };
 
 const getCurrentPrice = async (symbol) => {
   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
@@ -100,22 +85,31 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   const closes = candles.map((c) => c.close);
   const fastEMA = calculateEMA(closes, fastPeriod);
   const slowEMA = calculateEMA(closes, slowPeriod);
-  // Berechnung der Bollinger-Bänder
-  const bb = calculateBollingerBands(closes, CONFIG.bbPeriod, CONFIG.bbMultiplier);
   const lastPrice = closes[closes.length - 1];
 
-  // Strategie:
-  // Long: Aufwärts-Trend (fastEMA > slowEMA) und der Kurs liegt am oder unterhalb des unteren Bollinger-Bandes.
-  // Short: Abwärts-Trend (fastEMA < slowEMA) und der Kurs liegt am oder oberhalb des oberen Bollinger-Bandes.
-  if (fastEMA > slowEMA && lastPrice <= bb.lowerBand) {
+  if (fastEMA > slowEMA) {
     return { signal: "BUY", rawPrice: lastPrice };
-  } else if (fastEMA < slowEMA && lastPrice >= bb.upperBand) {
+  } else if (fastEMA < slowEMA) {
     return { signal: "SELL", rawPrice: lastPrice };
   } else {
     return null;
   }
 };
 
+// --- Trendbestimmung auf M15 mittels MACD ---
+const checkTrendM15 = async (symbol) => {
+  const candles = await getHistoricalData(symbol, CONFIG.timeframe.M15);
+  if (!candles.length) {
+    console.error(`No M15 data for ${symbol}`);
+    return null;
+  }
+  const closes = candles.map((c) => c.close);
+  const macdResult = calculateMACD(closes);
+  // Trendbestimmung: Histogram > 0 => BUY, sonst SELL
+  const trend = macdResult.histogram > 0 ? "BUY" : "SELL";
+  console.log(`M15 MACD Trend for ${symbol}: ${trend} (Histogram: ${macdResult.histogram.toFixed(5)})`);
+  return trend;
+};
 // Multi-Timeframe-Analyse: Zusätzlich wird der H1-Trend (als Filter) geprüft
 const checkMultiTimeframeSignal = async (symbol) => {
   const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastEMA, CONFIG.slowEMA);
@@ -123,21 +117,25 @@ const checkMultiTimeframeSignal = async (symbol) => {
     console.error(`Not enough data or no valid signal for ${symbol} on M1`);
     return null;
   }
-  // H1 Trendfilter:
-  const h1Candles = await getHistoricalData(symbol, CONFIG.timeframe.H1);
-  if (!h1Candles.length) {
-    console.error(`No H1 data for ${symbol}`);
+  const trendM15 = await checkTrendM15(symbol);
+  if (!trendM15) {
+    console.error(`Could not determine M15 trend for ${symbol}`);
     return null;
   }
-  const h1Closes = h1Candles.map((c) => c.close);
-  const h1FastEMA = calculateEMA(h1Closes, CONFIG.fastEMA);
-  const h1SlowEMA = calculateEMA(h1Closes, CONFIG.slowEMA);
-  const h1Trend = h1FastEMA > h1SlowEMA ? "BUY" : "SELL";
-  if (signalM1.signal === h1Trend) {
+  // Nur wenn das M1-Signal mit dem M15-Trend übereinstimmt, wird das Signal weitergereicht
+  if (signalM1.signal === trendM15) {
+    console.log(`Consistent signal for ${symbol}: ${signalM1.signal}`);
     return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+  } else {
+    console.log(`Inconsistent signal for ${symbol}: M1=${signalM1.signal} vs. M15=${trendM15}`);
+    return null;
   }
-  console.error(`H1 Trend (${h1Trend}) widerspricht dem M1 Signal für ${symbol}`);
-  return null;
+
+  // if (signalM1.signal) {
+  //   return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+  // }
+  // console.error(`Trens widerspricht dem M1 Signal für ${symbol}`);
+  // return null;
 };
 
 // --- Orderausführung ---
@@ -236,17 +234,17 @@ async function checkAndTradeForSymbol(symbol) {
     console.log(`No consistent multi-timeframe signal for ${symbol}`);
     return;
   }
-  console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
-  const openPositionsForSymbol = await getOpenPositionsForSymbol(symbol);
-  if (openPositionsForSymbol >= 1) {
-    console.log(`Trade for ${symbol} is already open. Skipping new trade.`);
-    return;
-  }
-  const openPositions = await getOpenPositionsCount();
-  if (openPositions >= 5) {
-    console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
-    return;
-  }
+  // console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
+  // const openPositionsForSymbol = await getOpenPositionsForSymbol(symbol);
+  // if (openPositionsForSymbol >= 1) {
+  //   console.log(`Trade for ${symbol} is already open. Skipping new trade.`);
+  //   return;
+  // }
+  // const openPositions = await getOpenPositionsCount();
+  // if (openPositions >= 5) {
+  //   console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
+  //   return;
+  // }
   const currentRawPrice = await getCurrentPrice(symbol);
   console.log(`Current market price for ${symbol}: ${currentRawPrice}`);
   const balance = await getAccountBalance();
@@ -274,24 +272,6 @@ const tick = async () => {
   n;
 };
 
-// --- Backtesting für alle Paare ---
-const test = async () => {
-  const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
-  const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
-  const result = await backtestStrategy(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
-
-  // console.log("Backtesting results:", result);
-
-  // let allResults = {};
-  // for (let symbol of Object.values(CONFIG.symbols)) {
-  //   console.log(`\n======================\nBacktesting für ${symbol}`);
-
-  //   const result = await backtestStrategy(symbol, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
-  //   allResults[symbol] = result;
-  // }
-  // return allResults;
-};
-
 // --- Main function --- //
 const startBot = async () => {
   try {
@@ -317,7 +297,6 @@ const startBot = async () => {
         console.error("Ungültige Balance-Daten:", data);
       }
     });
-
     x.Stream.listen.getTrades((data) => {
       if (data) {
         // Optional: hier können Trade-Daten geloggt werden
@@ -326,11 +305,16 @@ const startBot = async () => {
       }
     });
 
-    test();
+    // --- Backtesting für alle Paare ---
+    // await backtestStrategy(
+    //   CONFIG.symbols.EURUSD,CONFIG.timeframe.M1,
+    //   Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000),
+    //   Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000)
+    // );
 
     setInterval(async () => {
       if (isMarketOpen()) {
-        // await checkAllPairsAndTrade();
+        await checkAllPairsAndTrade();
       } else {
         console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
       }

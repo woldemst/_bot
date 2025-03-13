@@ -8,6 +8,8 @@ const CONFIG = {
   },
   timeframe: {
     M1: 1,
+    M15: 15,
+    H1: 60,
     // Weitere Timeframes können für Backtesting genutzt werden
   },
   // Indikatorparameter
