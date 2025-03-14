@@ -20,30 +20,34 @@ const calculateDynamicSLTP = (entryRaw, atr, isBuy) => {
   const tpDistance = atr * CONFIG.atrMultiplierTP;
   return isBuy ? { sl: entryRaw - slDistance, tp: entryRaw + tpDistance } : { sl: entryRaw + slDistance, tp: entryRaw - tpDistance };
 };
-const getAccountBalance = async () => {
-  try {
-    // Wenn currentBalance noch nicht gesetzt ist, direkt abfragen:
-    if (currentBalance === null) {
-      const balanceData = await x.Socket.send.getBalance();
-      if (balanceData && balanceData.balance !== undefined) {
-        currentBalance = balanceData.balance;
-        console.log("Account balance (direct API):", currentBalance);
-        return currentBalance;
-      } else {
-        console.error("Invalid balance data:", balanceData);
-        return null;
-      }
-    }
+async function getAccountBalance() {
+  if (currentBalance !== null) {
     return currentBalance;
-  } catch (err) {
-    console.error("Error getting account balance:", err);
-    return null;
   }
-};
+  // Warte solange, bis currentBalance aktualisiert wurde (ohne Timeout-Rejection)
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      if (currentBalance !== null) {
+        clearInterval(interval);
+        resolve(currentBalance);
+      }
+    }, 500);
+  });
+}
+
 const getHistoricalData = async (symbol, timeframe) => {
   try {
     const result = await x.getPriceHistory({ symbol, period: timeframe, socketId: getSocketId() });
-    return result && result.candles ? result.candles : [];
+    if (result && result.candles) {
+      // Normalisiere close, high und low für alle Kerzen
+      return result.candles.map((candle) => ({
+        close: normalizePrice(symbol, candle.close),
+        high: normalizePrice(symbol, candle.high),
+        low: normalizePrice(symbol, candle.low),
+      }));
+    } else {
+      return [];
+    }
   } catch (err) {
     console.error("Error in getHistoricalData:", err);
     return [];
@@ -117,55 +121,48 @@ const checkMultiTimeframeSignal = async (symbol) => {
     console.error(`Not enough data or no valid signal for ${symbol} on M1`);
     return null;
   }
-  const trendM15 = await checkTrendM15(symbol);
-  if (!trendM15) {
-    console.error(`Could not determine M15 trend for ${symbol}`);
-    return null;
-  }
-  // Nur wenn das M1-Signal mit dem M15-Trend übereinstimmt, wird das Signal weitergereicht
-  if (signalM1.signal === trendM15) {
-    console.log(`Consistent signal for ${symbol}: ${signalM1.signal}`);
-    return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
-  } else {
-    console.log(`Inconsistent signal for ${symbol}: M1=${signalM1.signal} vs. M15=${trendM15}`);
-    return null;
-  }
-
-  // if (signalM1.signal) {
-  //   return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+  // const trendM15 = await checkTrendM15(symbol);
+  // if (!trendM15) {
+  //   console.error(`determine M15 trend for ${symbol}`);
+  //   return null;
   // }
-  // console.error(`Trens widerspricht dem M1 Signal für ${symbol}`);
-  // return null;
+  // // Nur wenn das M1-Signal mit dem M15-Trend übereinstimmt, wird das Signal weitergereicht
+  // if (signalM1.signal === trendM15) {
+  //   console.log(`Consistent signal for ${symbol}: ${signalM1.signal}`);
+  //   return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+  // } else {
+  //   console.log(`Inconsistent signal for ${symbol}: M1=${signalM1.signal} vs. M15=${trendM15}`);
+  //   return null;
+  // }
+
+  if (signalM1.signal) {
+    return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+  }
+  console.error(`Trens widerspricht dem M1 Signal für ${symbol}`);
+  return null;
 };
 
 // --- Orderausführung ---
 // Nutzt den normalisierten Preis, um Entry, SL und TP zu berechnen.
 const executeTradeForSymbol = async (symbol, direction, rawPrice, lotSize) => {
-  const factor = symbol.includes("JPY") ? 1000 : 100000;
-  const pipMultiplier = getPipMultiplier(symbol);
-  const spreadRaw = 0.0002 * factor;
-  const rawEntry = direction === "BUY" ? rawPrice + spreadRaw : rawPrice;
-  const entry = normalizePrice(symbol, rawEntry);
+  const spread = 0.0002; // Fester Spread in den gleichen Einheiten (z.B. EURUSD)
+  // rawPrice ist bereits normalisiert (z.B. 1.09086)
+  const entry = direction === "BUY" ? rawPrice + spread : rawPrice;
 
   // ATR-basierte dynamische SL/TP-Berechnung
   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
   const atr = calculateATR(candles.slice(-15));
   let sl, tp;
   if (atr) {
-    const dynamic = calculateDynamicSLTP(rawEntry, atr, direction === "BUY");
-    sl = normalizePrice(symbol, dynamic.sl);
-    tp = normalizePrice(symbol, dynamic.tp);
+    const dynamic = calculateDynamicSLTP(entry, atr, direction === "BUY");
+    sl = dynamic.sl;
+    tp = dynamic.tp;
   } else {
-    const rawSL =
-      direction === "BUY"
-        ? rawEntry - CONFIG.stopLossPips * (pipMultiplier * factor)
-        : rawEntry + CONFIG.stopLossPips * (pipMultiplier * factor);
-    const rawTP =
-      direction === "BUY"
-        ? rawEntry + CONFIG.takeProfitPips * (pipMultiplier * factor)
-        : rawEntry - CONFIG.takeProfitPips * (pipMultiplier * factor);
-    sl = normalizePrice(symbol, rawSL);
-    tp = normalizePrice(symbol, rawTP);
+    // Fallback: use fixed SL/TP values, directly in price units
+    const rawSL = direction === "BUY" ? entry - CONFIG.stopLossPips * 0.0001 : entry + CONFIG.stopLossPips * 0.0001;
+    const rawTP = direction === "BUY" ? entry + CONFIG.takeProfitPips * 0.0001 : entry - CONFIG.takeProfitPips * 0.0001;
+    sl = rawSL;
+    tp = rawTP;
   }
 
   console.log(`Executing ${direction} trade for ${symbol}: entry=${entry}, SL=${sl}, TP=${tp}`);
@@ -278,30 +275,37 @@ const startBot = async () => {
     await connectXAPI();
 
     // Streams abonnieren
-    x.Stream.subscribe
-      .getBalance()
-      .then(() => console.log("Balance-Stream abonniert"))
-      .catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err));
-    x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed"));
-    x.Stream.subscribe
-      .getTrades()
-      .then(() => console.log("Trades-Stream abonniert"))
-      .catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err));
+    // x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed"));
+    // x.Stream.subscribe
+    //   .getTrades()
+    //   .then(() => console.log("Trades-Stream abonniert"))
+    //   .catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err));
 
+    // x.Stream.subscribe
+    //   .getBalance()
+    //   .then(() => console.log("Balance-Stream abonniert"))
+    //   .catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err));
+
+        // Streams abonnieren
+        await Promise.all([
+          x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed")),
+          x.Stream.subscribe.getTrades().then(() => console.log("Trades-Stream abonniert")).catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err)),
+          x.Stream.subscribe.getBalance().then(() => console.log("Balance-Stream abonniert")).catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err))
+        ]);
     // Listener registrieren
+    x.Stream.listen.getTrades((data) => {
+      if (data) {
+        // Optional: hier können Trade-Daten geloggt werden
+      } else {
+        console.error("no trades data:", data);
+      }
+    });
     x.Stream.listen.getBalance((data) => {
       if (data && data.balance !== undefined) {
         currentBalance = data.balance;
         console.log("Balance updated:", currentBalance);
       } else {
         console.error("Ungültige Balance-Daten:", data);
-      }
-    });
-    x.Stream.listen.getTrades((data) => {
-      if (data) {
-        // Optional: hier können Trade-Daten geloggt werden
-      } else {
-        console.error("no trades data:", data);
       }
     });
 
@@ -312,13 +316,17 @@ const startBot = async () => {
     //   Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000)
     // );
 
+    // Warten, bis ein Balance-Wert vorliegt
+    const initialBalance = await getAccountBalance();
+    console.log("Initial balance received:", initialBalance);
+
     setInterval(async () => {
       if (isMarketOpen()) {
         await checkAllPairsAndTrade();
       } else {
         console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
       }
-    }, 60000);
+    }, 10000);
 
     console.log("Bot läuft...");
   } catch (error) {
