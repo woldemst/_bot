@@ -5,7 +5,7 @@ const XAPI = require("xapi-node").default;
 const x = new XAPI({
   accountId: process.env.DEMO_ACCOUNT_ID,
   password: process.env.DEMO_PASSWORD,
-  type: "demo", 
+  type: "demo",
 });
 
 const connectXAPI = async () => {
@@ -20,5 +20,7 @@ const connectXAPI = async () => {
 
 // Hole die Socket-ID, nachdem die Verbindung hergestellt wurde
 const getSocketId = () => x.Socket.getSocketId();
+const socketId = getSocketId();
+// const streamId = socketId && x.Socket.connections[socketId].streamId;
 
-module.exports = { x, connectXAPI, getSocketId };
+module.exports = { x, connectXAPI, getSocketId, socketId };
