@@ -1,6 +1,6 @@
 // backtesting.js
 const { x, getSocketId } = require("./xapi");
-const { calculateEMA, calculateMACD } = require("./indicators");
+const { calculateEMA, calculateMACD, calculateATR } = require("./indicators");
 const { CONFIG } = require("./config");
 
 const normalizePrice = (symbol, rawPrice) => {
@@ -11,205 +11,189 @@ const normalizePrice = (symbol, rawPrice) => {
 const getPipMultiplier = (symbol) => {
   return symbol.includes("JPY") ? 0.01 : 0.0001;
 };
+const calculateDynamicSLTP = (entry, atr, isBuy) => {
+  return {
+    sl: isBuy ? entry - atr * CONFIG.atrMultiplierSL : entry + atr * CONFIG.atrMultiplierSL,
+    tp: isBuy ? entry + atr * CONFIG.atrMultiplierTP : entry - atr * CONFIG.atrMultiplierTP,
+  };
+};
+const calculatePositionSize = (equity, entry, sl, symbol) => {
+  const riskAmount = equity * CONFIG.riskPerTrade;
+  const riskPerUnit = Math.abs(entry - sl);
+  return riskPerUnit > 0 ? (riskAmount / riskPerUnit).toFixed(2) : 0;
+};
 
-const generateSignal = (closes, symbol) => {
-  const normalizedCloses = closes.map((price) => price);
-  // console.log('normalizedCloses:', normalizedCloses);
+const generateSignal = (closes, candles, currentIndex, symbol) => {
+  if (currentIndex < 50) return null;
 
-  const fastEMA = calculateEMA(normalizedCloses, CONFIG.fastEMA);
-  const slowEMA = calculateEMA(normalizedCloses, CONFIG.slowEMA);
-  const macd = calculateMACD(normalizedCloses);
-  const entryRaw = normalizedCloses[normalizedCloses.length - 1];
-  // console.log("entryRaw:", entryRaw);
-
-  // console.log("normalized fastEMA:", fastEMA, "normalized slowEMA:", slowEMA);
-
-  if (fastEMA === null || slowEMA === null) return null;
+  const fastEMA = calculateEMA(closes, CONFIG.fastEMA);
+  const slowEMA = calculateEMA(closes, CONFIG.slowEMA);
+  const macd = calculateMACD(closes);
   
-  if (fastEMA > slowEMA && macd.histogram > 0) {
-    return { signal: "BUY", entryRaw };
-  } else if (fastEMA < slowEMA && macd.histogram < 0) {
-    return { signal: "SELL", entryRaw };
+  // M15 Trend-EMA50
+  const m15Candles = candles.filter((_, idx) => idx <= currentIndex && idx % 15 === 0);
+  const m15Closes = m15Candles.slice(-50).map(c => c.close);
+  const m15EMA50 = calculateEMA(m15Closes, 50);
+
+  if (!fastEMA || !slowEMA || !m15EMA50) return null;
+
+  const price = closes[closes.length - 1];
+  const m15Trend = price > m15EMA50 ? 'BULL' : 'BEAR';
+
+  if (fastEMA > slowEMA && macd.histogram > 0 && m15Trend === 'BULL') {
+    return { signal: "BUY", entryRaw: price };
+  }
+  if (fastEMA < slowEMA && macd.histogram < 0 && m15Trend === 'BEAR') {
+    return { signal: "SELL", entryRaw: price };
   }
   return null;
 };
 
 const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp) => {
-  console.log(
-    `\nBacktesting ${symbol} von ${new Date(startTimestamp * 1000).toLocaleString()} bis ${new Date(endTimestamp * 1000).toLocaleString()}`
-  );
+  console.log(`\n=== Backtesting ${symbol} ===`);
 
-  let allData;
-  try {
-    allData = await x.getPriceHistory({
-      symbol,
-      period: timeframe,
-      start: startTimestamp,
-      end: endTimestamp,
-      socketId: getSocketId(),
-    });
-  } catch (err) {
-    console.error("Error during getPriceHistory:", err);
-    return;
-  }
-
-  if (!allData || !allData.candles || allData.candles.length === 0) {
-    console.error("Keine historischen Daten gefunden.");
-    return;
-  }
-  const candles = allData.candles;
-  console.log(`Backtesting: ${candles.length} Candles geladen.`);
-
-  // Normalisiere die relevanten Kerzendaten (close, high, low)
-  candles.forEach((candle) => {
-    candle.close = normalizePrice(symbol, candle.close);
-    candle.high = normalizePrice(symbol, candle.high);
-    candle.low = normalizePrice(symbol, candle.low);
+  const historicalData = await x.getPriceHistory({
+    symbol,
+    period: timeframe,
+    start: startTimestamp,
+    end: endTimestamp,
+    socketId: getSocketId(),
   });
 
+  if (!historicalData?.candles?.length) {
+    console.error("No historical data found");
+    return;
+  }
+
+  // Preprocess candles
+  const candles = historicalData.candles.map(c => ({
+    ...c,
+    close: normalizePrice(symbol, c.close),
+    high: normalizePrice(symbol, c.high),
+    low: normalizePrice(symbol, c.low)
+  }));
+
   let trades = [];
-  let equityCurve = [];
-  let equity = 500; // Startkapital
-  const initialCapital = equity;
-  const factor = symbol.includes("JPY") ? 1000 : 100000;
-  const pipMultiplier = getPipMultiplier(symbol);
-  const maxDrawdownPctLimit = CONFIG.maxDrawdownPctLimit;
-  const maxDuration = CONFIG.maxTradeDurationCandles; // Feste Trade-Dauer in Candles
+  let equity = CONFIG.initialCapital;
+  let equityCurve = [equity];
+  let maxDrawdown = 0;
+  let peak = equity;
 
-  // Starte ab einem Index, an dem genügend Daten vorhanden sind (hier ab Index 50)
   for (let i = 50; i < candles.length - 1; i++) {
-    if (((initialCapital - equity) / initialCapital) * 100 >= maxDrawdownPctLimit) {
-      console.log("Maximaler Drawdown erreicht – Backtesting wird gestoppt.");
-      break;
-    }
-
-    const slice = candles.slice(0, i + 1);
-    const rawCloses = slice.map((c) => c.close);
-
-    // Signal generieren
-    const signalData = generateSignal(rawCloses, symbol);
+    const closes = candles.slice(0, i + 1).map(c => c.close);
+    const signalData = generateSignal(closes, candles, i, symbol);
     if (!signalData) continue;
-    const entryRaw = signalData.entryRaw; 
-    // console.log("Signal:", signalData);
 
-    // Feste SL/TP-Abstände (in Pips)
-    const riskDistance = CONFIG.stopLossPips * pipMultiplier;
-    const rewardDistance = CONFIG.takeProfitPips * pipMultiplier;
-    // console.log(`Risk Distance: ${riskDistance}, Reward Distance: ${rewardDistance}`);
+    // Risk management
+    const atr = calculateATR(candles.slice(i - 14, i + 1));
+    const { sl, tp } = calculateDynamicSLTP(signalData.entryRaw, atr, signalData.signal === 'BUY');
+    const spread = symbol.includes("JPY") ? 0.02 : 0.0002;
+    const entryPrice = signalData.signal === 'BUY' 
+      ? signalData.entryRaw + spread 
+      : signalData.entryRaw - spread;
 
-    const expectedRR = rewardDistance / riskDistance;
-    if (expectedRR < CONFIG.minRR) {
-      return;
-    }
+    // Position sizing
+    const riskAmount = equity * CONFIG.riskPerTrade;
+    const riskPerUnit = Math.abs(entryPrice - sl);
+    const positionSize = riskPerUnit > 0 ? riskAmount / riskPerUnit : 0;
 
-    // Exit‑Logik: Suche in den nächsten maxDuration Candles nach einem Exit‑Event
-    let exitRaw = null;
-    let exitReason = null;
-    let durationCandles = 0;
-    for (let j = i + 1; j < Math.min(i + 1 + maxDuration, candles.length); j++) {
-      durationCandles = j - i;
-      const candle = candles[j];
-      // Nutze die normalisierten Werte (High/Low)
-      const normLow = candle.low;
-      const normHigh = candle.high;
-      // console.log('normal', normLow, normHigh);
+    // Trade execution
+    let exitPrice = null;
+    let exitReason = 'EndOfPeriod';
+    let duration = 0;
+    
+    for (let j = i + 1; j < Math.min(i + CONFIG.maxTradeDurationCandles + 1, candles.length); j++) {
+      duration = j - i;
+      const currentCandle = candles[j];
 
-      if (signalData.signal === "BUY") {
-        if (normLow <= entryRaw - riskDistance) {
-          exitRaw = entryRaw - riskDistance;
-          exitReason = "SL";
-          break;
-        }
-        if (normHigh >= entryRaw + rewardDistance) {
-          exitRaw = entryRaw + rewardDistance;
-          exitReason = "TP";
-          // console.log("exit raw", exitRaw, entryRaw, riskDistance);
-          break;
-        }
-      } else if (signalData.signal === "SELL") {
-        if (normHigh >= entryRaw + riskDistance) {
-          exitRaw = entryRaw + riskDistance;
-          exitReason = "SL";
-          break;
-        }
-        if (normLow <= entryRaw - rewardDistance) {
-          exitRaw = entryRaw - rewardDistance;
-          exitReason = "TP";
-          break;
-        }
+      const hitSL = signalData.signal === 'BUY' 
+        ? currentCandle.low <= sl 
+        : currentCandle.high >= sl;
+      
+      const hitTP = signalData.signal === 'BUY' 
+        ? currentCandle.high >= tp 
+        : currentCandle.low <= tp;
+
+      if (hitSL || hitTP) {
+        exitPrice = hitSL ? sl : tp;
+        exitReason = hitSL ? 'SL' : 'TP';
+        break;
       }
     }
-    // Falls kein Exit innerhalb von maxDuration Candles gefunden wurde:
-    if (exitRaw === null) {
-      exitRaw = candles[Math.min(i + maxDuration, candles.length - 1)].close;
-      exitReason = "EndOfPeriod";
-      durationCandles = Math.min(maxDuration, candles.length - i - 1);
+
+    if (!exitPrice) {
+      exitPrice = candles[Math.min(i + CONFIG.maxTradeDurationCandles, candles.length - 1)].close;
+      duration = CONFIG.maxTradeDurationCandles;
     }
 
-    const profitRaw = signalData.signal === "BUY" ? exitRaw - entryRaw : entryRaw - exitRaw;
-    const profitPips = profitRaw / pipMultiplier;
-    const profitPct = ((exitRaw - entryRaw) / entryRaw) * 100;
+    // Profit calculation
+    const profit = signalData.signal === 'BUY' 
+      ? (exitPrice - entryPrice) * positionSize 
+      : (entryPrice - exitPrice) * positionSize;
+
+    equity += profit;
+    equityCurve.push(equity);
+    maxDrawdown = Math.max(maxDrawdown, peak - equity);
+    if (equity > peak) peak = equity;
 
     trades.push({
+      symbol,
       signal: signalData.signal,
-      entry: entryRaw,
-      exit: exitRaw,
-      profit: parseFloat(profitRaw.toFixed(5)),
-      profitPct: parseFloat(profitPct.toFixed(2)),
-      profitPips: parseFloat(profitPips.toFixed(5)),
-      durationCandles,
-      exitReason,
-      rrRatio: expectedRR.toFixed(2),
+      entry: entryPrice.toFixed(5),
+      exit: exitPrice.toFixed(5),
+      sl: sl.toFixed(5),
+      tp: tp.toFixed(5),
+      profit: profit.toFixed(2),
+      duration,
+      exitReason
     });
-    equity += profitRaw;
-    equityCurve.push(parseFloat(equity.toFixed(2)));
-
   }
 
-  // Kennzahlen berechnen
+  // Statistics calculation
   const totalTrades = trades.length;
-  const wins = trades.filter((t) => t.profit > 0).length;
+  const wins = trades.filter(t => t.profit > 0).length;
   const losses = totalTrades - wins;
-  const totalProfit = equity - initialCapital;
-  const totalProfitPct = (totalProfit / initialCapital) * 100;
-  const avgProfit = totalTrades ? totalProfit / totalTrades : 0;
-  const avgProfitPct = totalTrades ? totalProfitPct / totalTrades : 0;
+  const avgProfit = totalTrades > 0 
+    ? trades.reduce((sum, t) => sum + parseFloat(t.profit), 0) / totalTrades 
+    : 0;
+  const avgRR = totalTrades > 0
+    ? trades.reduce((sum, t) => {
+        const risk = Math.abs(t.entry - t.sl);
+        const reward = Math.abs(t.exit - t.entry);
+        return sum + (reward / risk);
+      }, 0) / totalTrades
+    : 0;
 
-  let maxDrawdown = 0;
-  let peak = equityCurve[0] || initialCapital;
-  for (let value of equityCurve) {
-    if (value > peak) peak = value;
-    const drawdown = peak - value;
-    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
-  }
-  const maxDrawdownPct = (maxDrawdown / initialCapital) * 100;
-  const avgDuration = totalTrades ? trades.reduce((sum, t) => sum + t.durationCandles, 0) / totalTrades : 0;
-  const avgRR = totalTrades ? trades.reduce((sum, t) => sum + parseFloat(t.rrRatio), 0) / totalTrades : 0;
+  console.log(`
+=== Ergebnisse ===
+Symbol: ${symbol}
+Trades: ${totalTrades}
+Gewinne: ${wins} (${((wins/totalTrades)*100 || 0).toFixed(1)}%)
+Verluste: ${losses}
+Gesamtprofit: ${(equity - CONFIG.initialCapital).toFixed(2)}€
+Durchschn. Profit/Trade: ${avgProfit.toFixed(2)}€
+Max Drawdown: ${maxDrawdown.toFixed(2)}€ (${((maxDrawdown/CONFIG.initialCapital)*100).toFixed(1)}%)
+Durchschn. Trade-Dauer: ${(trades.reduce((sum, t) => sum + t.duration, 0)/totalTrades || 0).toFixed(1)} Kerzen
+Durchschn. R/R: ${avgRR.toFixed(2)}:1
 
-  console.log(`\nBacktesting Ergebnisse für ${symbol}:`);
-  console.log(`Trades: ${totalTrades}, Wins: ${wins} (${((wins / totalTrades) * 100).toFixed(2)}%), Losses: ${losses}`);
-  console.log(`Total Profit: ${totalProfit.toFixed(2)} (${totalProfitPct.toFixed(2)}%)`);
-  console.log(`Average Profit per Trade: ${avgProfit.toFixed(2)} (${avgProfitPct.toFixed(2)}%)`);
-  console.log(`Max Drawdown: ${maxDrawdown.toFixed(2)} (${maxDrawdownPct.toFixed(2)}%)`);
-  console.log(`Average Trade Duration (Candles): ${avgDuration.toFixed(2)}`);
-  console.log(`Average RR Ratio: ${avgRR.toFixed(2)}`);
-  console.log("Detailed Trades Sample:", trades.slice(0, 10));
-  console.log("Equity Curve (letzte 10 Werte):", equityCurve.slice(-10));
+Letzte 10 Trades:
+${JSON.stringify(trades.slice(-10), null, 2)}
+
+Equity Curve (letzte 10 Werte):
+${equityCurve.slice(-10).map(v => v.toFixed(2)).join(', ')}
+`);
 
   return {
-    totalTrades,
-    wins,
-    losses,
-    totalProfit,
-    totalProfitPct,
-    avgProfit,
-    avgProfitPct,
-    maxDrawdown,
-    maxDrawdownPct,
-    avgDuration,
-    avgRR,
     trades,
     equityCurve,
+    statistics: {
+      totalTrades,
+      wins,
+      losses,
+      avgProfit,
+      maxDrawdown,
+      avgRR
+    }
   };
 };
 
