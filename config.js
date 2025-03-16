@@ -38,6 +38,7 @@ const CONFIG = {
   maxTradeDurationCandles: 10,
   maxDrawdownPctLimit: 20,
   minRR: 2.0,
+  initialCapital: 500,
 };
 
 module.exports = { CONFIG };

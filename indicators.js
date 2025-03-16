@@ -35,33 +35,33 @@ const calculateMACD = (prices, shortPeriod = CONFIG.macdShort, longPeriod = CONF
   return { macdLine: macdValues[macdValues.length - 1], signalLine, histogram };
 };
 
-const calculateRSI = (prices, period = CONFIG.rsiPeriod) => {
-  if (prices.length < period + 1) return null;
-  let gains = 0,
-    losses = 0;
-  for (let i = 1; i <= period; i++) {
-    const change = prices[i] - prices[i - 1];
-    if (change > 0) gains += change;
-    else losses -= change;
-  }
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
-};
-
 const calculateATR = (candles, period = 14) => {
   if (candles.length < period + 1) return null;
-  let trs = [];
+  
+  const trueRanges = [];
+  
+  // Berechne True Range für jede Kerze
   for (let i = 1; i < candles.length; i++) {
-    const high = candles[i].high;
-    const low = candles[i].low;
     const prevClose = candles[i - 1].close;
-    const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
-    trs.push(tr);
+    const { high, low } = candles[i];
+    
+    const tr = Math.max(
+      high - low,
+      Math.abs(high - prevClose),
+      Math.abs(low - prevClose)
+    );
+    trueRanges.push(tr);
   }
-  return calculateSMA(trs, period);
+
+  // Initialer ATR als einfacher Durchschnitt
+  let atr = trueRanges.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  
+  // Glättung der nachfolgenden Werte
+  for (let i = period; i < trueRanges.length; i++) {
+    atr = ((atr * (period - 1)) + trueRanges[i]) / period;
+  }
+
+  return parseFloat(atr.toFixed(5));
 };
 
 const calculateBollingerBands = (prices, period, multiplier) => {
@@ -75,7 +75,42 @@ const calculateBollingerBands = (prices, period, multiplier) => {
   const lowerBand = sma - multiplier * stdDev;
   return { sma, upperBand, lowerBand };
 };
-
+const calculateRSI = (prices, period = 14) => {
+  if (prices.length < period + 1) return null;
+  
+  // Erste Periode: durchschnittliche Gewinne und Verluste berechnen
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) {
+      gains += change;
+    } else {
+      losses -= change; // change ist negativ
+    }
+  }
+  
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  
+  // Glättung für nachfolgende Perioden
+  for (let i = period + 1; i < prices.length; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) {
+      avgGain = ((avgGain * (period - 1)) + change) / period;
+      avgLoss = ((avgLoss * (period - 1)) + 0) / period;
+    } else {
+      avgGain = ((avgGain * (period - 1)) + 0) / period;
+      avgLoss = ((avgLoss * (period - 1)) - change) / period;
+    }
+  }
+  
+  // Falls avgLoss 0 ist, ist RSI 100 (starker Aufwärtstrend)
+  if (avgLoss === 0) return 100;
+  
+  const rs = avgGain / avgLoss;
+  const rsi = 100 - (100 / (1 + rs));
+  return rsi;
+};
 module.exports = {
   calculateSMA,
   calculateEMA,
