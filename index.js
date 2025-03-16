@@ -113,8 +113,7 @@ const checkTrendM15 = async (symbol) => {
   const trend = macdResult.histogram > 0 ? "BUY" : "SELL";
   console.log(`M15 MACD Trend for ${symbol}: ${trend} (Histogram: ${macdResult.histogram.toFixed(5)})`);
   return trend;
-};
-// Multi-Timeframe-Analyse: Zusätzlich wird der H1-Trend (als Filter) geprüft
+}; // Multi-Timeframe-Analyse: Zusätzlich wird der H1-Trend (als Filter) geprüft
 const checkMultiTimeframeSignal = async (symbol) => {
   const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastEMA, CONFIG.slowEMA);
   if (!signalM1) {
@@ -122,10 +121,15 @@ const checkMultiTimeframeSignal = async (symbol) => {
     return null;
   }
   // const trendM15 = await checkTrendM15(symbol);
-  // if (!trendM15) {
-  //   console.error(`determine M15 trend for ${symbol}`);
+  // if (!trendM15) return null;
+
+  // if (signalM1.signal === trendM15) {
+  //   return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+  // } else {
+  //   console.log(`M1/M15 Conflict: ${signalM1.signal} vs ${trendM15}`);
   //   return null;
   // }
+
   // // Nur wenn das M1-Signal mit dem M15-Trend übereinstimmt, wird das Signal weitergereicht
   // if (signalM1.signal === trendM15) {
   //   console.log(`Consistent signal for ${symbol}: ${signalM1.signal}`);
@@ -286,12 +290,18 @@ const startBot = async () => {
     //   .then(() => console.log("Balance-Stream abonniert"))
     //   .catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err));
 
-        // Streams abonnieren
-        await Promise.all([
-          x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed")),
-          x.Stream.subscribe.getTrades().then(() => console.log("Trades-Stream abonniert")).catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err)),
-          x.Stream.subscribe.getBalance().then(() => console.log("Balance-Stream abonniert")).catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err))
-        ]);
+    // Streams abonnieren
+    await Promise.all([
+      x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed")),
+      x.Stream.subscribe
+        .getTrades()
+        .then(() => console.log("Trades-Stream abonniert"))
+        .catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err)),
+      x.Stream.subscribe
+        .getBalance()
+        .then(() => console.log("Balance-Stream abonniert"))
+        .catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err)),
+    ]);
     // Listener registrieren
     x.Stream.listen.getTrades((data) => {
       if (data) {
@@ -303,30 +313,30 @@ const startBot = async () => {
     x.Stream.listen.getBalance((data) => {
       if (data && data.balance !== undefined) {
         currentBalance = data.balance;
-        console.log("Balance updated:", currentBalance);
+        // console.log("Balance updated:", currentBalance);
       } else {
         console.error("Ungültige Balance-Daten:", data);
       }
     });
 
-    // --- Backtesting für alle Paare ---
-    // await backtestStrategy(
-    //   CONFIG.symbols.EURUSD,CONFIG.timeframe.M1,
-    //   Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000),
-    //   Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000)
-    // );
-
     // Warten, bis ein Balance-Wert vorliegt
     const initialBalance = await getAccountBalance();
-    console.log("Initial balance received:", initialBalance);
-
-    setInterval(async () => {
-      if (isMarketOpen()) {
-        await checkAllPairsAndTrade();
-      } else {
-        console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
-      }
-    }, 10000);
+    // console.log("Initial balance received:", initialBalance);
+    
+    // --- Backtesting für alle Paare ---
+    await backtestStrategy(
+      CONFIG.symbols.EURUSD, 
+      CONFIG.timeframe.M1, 
+      Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000), 
+      Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000)
+    );
+    // setInterval(async () => {
+    //   if (isMarketOpen()) {
+    //     await checkAllPairsAndTrade();
+    //   } else {
+    //     console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
+    //   }
+    // }, 10000);
 
     console.log("Bot läuft...");
   } catch (error) {
@@ -337,8 +347,22 @@ const startBot = async () => {
 
 const isMarketOpen = () => {
   const now = new Date();
-  const day = now.getDay(); // 0 = Sonntag, 6 = Samstag
-  // Forex-Markt ist in der Regel von Montag (1) bis Freitag (5) offen
-  return day >= 1 && day <= 5;
+  const day = now.getUTCDay();
+  const hour = now.getUTCHours();
+
+  // Forex Marktzeiten (UTC):
+  // Sydney: 22:00-06:00
+  // Tokyo: 00:00-09:00
+  // London: 08:00-17:00
+  // New York: 13:00-22:00
+  return (
+    day >= 1 &&
+    day <= 5 &&
+    (hour >= 22 ||
+      hour < 6 || // Sydney
+      (hour >= 0 && hour < 9) || // Tokyo
+      (hour >= 8 && hour < 17) || // London
+      (hour >= 13 && hour < 22)) // New York
+  );
 };
 startBot();
