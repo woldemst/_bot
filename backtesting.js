@@ -46,7 +46,7 @@ const generateSignal = (candles, symbol) => {
 };
 
 const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp) => {
-  console.log(`\nBacktesting ${symbol} from ${new Date(startTimestamp)} to ${new Date(endTimestamp)}`);
+  // console.log(`\nBacktesting ${symbol} from ${new Date(startTimestamp)} to ${new Date(endTimestamp)}`);
 
   let allData;
   
@@ -54,8 +54,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     allData = await x.getPriceHistory({
       symbol,
       period: timeframe,
-      start: startTimestamp,
-
+      // start: startTimestamp,
       socketId: getSocketId(),
     });
   } catch (err) {
