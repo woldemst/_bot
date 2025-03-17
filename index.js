@@ -37,9 +37,7 @@ const normalizePrice = (symbol, rawPrice) => {
   return parseFloat((rawPrice / factor).toFixed(5));
 };
 
-const getPipMultiplier = (symbol) => {
-  return symbol.includes("JPY") ? 0.01 : 0.0001;
-};
+const getPipMultiplier = () => 0.0001;
 
 // Abrufen historischer Daten (Live-Daten)
 const getHistoricalData = async (symbol, timeframe) => {
@@ -72,11 +70,11 @@ const getCurrentPrice = async (symbol) => {
   return closes[closes.length - 1];
 };
 
-const calculatePositionSize = (accountBalance, riskPerTrade, stopLossPips, symbol) => {
-  const pipMultiplier = getPipMultiplier(symbol);
-  const factor = symbol.includes("JPY") ? 1000 : 100000;
+// Positionsgrößenberechnung (wie bisher)
+const calculatePositionSize = (accountBalance, riskPerTrade, stopLossPips) => {
+  const pipMultiplier = getPipMultiplier();
   const riskAmount = accountBalance * riskPerTrade;
-  return riskAmount / (stopLossPips * (pipMultiplier * factor));
+  return riskAmount / (stopLossPips * pipMultiplier);
 };
 
 // Signal-Generierung (wie im Backtesting – EMA und MACD)
@@ -269,7 +267,8 @@ const checkAndTradeForSymbol = async (symbol) => {
   const pipMultiplier = getPipMultiplier(symbol);
   const riskAmount = balance * (CONFIG.riskPerTrade || 0.02);
   const pipsRisked = (signalData.signal === "BUY" ? entryRaw - sl : sl - entryRaw) / pipMultiplier;
-  const positionSize = riskAmount / pipsRisked;
+  const positionSize = calculatePositionSize(balance, CONFIG.riskPerTrade, CONFIG.stopLossPips);
+
   console.log(`Placing ${signalData.signal} trade for ${symbol} with lot size: ${positionSize}`);
 
   // Führe den Trade aus
