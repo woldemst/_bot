@@ -264,15 +264,14 @@ const checkAndTradeForSymbol = async (symbol) => {
     console.error("Balance not available.");
     return;
   }
-  const pipMultiplier = getPipMultiplier(symbol);
-  const riskAmount = balance * (CONFIG.riskPerTrade || 0.02);
-  const pipsRisked = (signalData.signal === "BUY" ? entryRaw - sl : sl - entryRaw) / pipMultiplier;
-  const positionSize = calculatePositionSize(balance, CONFIG.riskPerTrade, CONFIG.stopLossPips);
 
-  console.log(`Placing ${signalData.signal} trade for ${symbol} with lot size: ${positionSize}`);
+  const riskPerTrade = CONFIG.riskPerTrade || 0.02;
+  console.log("CONFIG.riskPerTrade", CONFIG.riskPerTrade);
+
+  console.log(`Placing ${signalData.signal} trade for ${symbol} with lot size: ${riskPerTrade}`);
 
   // Führe den Trade aus
-  await executeTradeForSymbol(symbol, signalData.signal, entryRaw, positionSize);
+  await executeTradeForSymbol(symbol, signalData.signal, entryRaw, riskPerTrade);
 };
 
 const checkAllPairsAndTrade = async () => {
@@ -294,7 +293,7 @@ const startBot = async () => {
     await connectXAPI();
     // Abonniere Streams
     await Promise.all([
-      x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed")),
+      // x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed")),
       x.Stream.subscribe
         .getTrades()
         .then(() => console.log("Trades-Stream subscribed"))
@@ -340,7 +339,7 @@ const startBot = async () => {
       } else {
         console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
       }
-    }, 60000);
+    }, 10000);
 
     console.log("Bot is live...");
   } catch (error) {
