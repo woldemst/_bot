@@ -1,176 +1,635 @@
-// index.js
-require("dotenv").config();
-const { x, connectXAPI, getSocketId } = require("./xapi.js");
-const { calculateEMA, calculateMACD, calculateATR } = require("./indicators");
-const { CONFIG } = require("./config");
+// // index.js
+// require("dotenv").config();
+// const { x, connectXAPI, getSocketId } = require("./xapi.js");
+// const { calculateEMA, calculateMACD, calculateATR } = require("./indicators");
+// const { CONFIG } = require("./config");
 
-// Globales Handling von unhandledRejections
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+// // Globales Handling von unhandledRejections
+// process.on("unhandledRejection", (reason, promise) => {
+//   console.error("Unhandled Rejection at:", promise, "reason:", reason);
+// });
+
+// let currentBalance = null;
+// let currentTrades = [];
+
+// const calculateDynamicSLTP = (entryRaw, atr, isBuy) => {
+//   const slDistance = atr * CONFIG.atrMultiplierSL;
+//   const tpDistance = atr * CONFIG.atrMultiplierTP;
+
+//   let sl = isBuy ? entryRaw - slDistance : entryRaw + slDistance;
+//   let tp = isBuy ? entryRaw + tpDistance : entryRaw - tpDistance;
+
+//   return {
+//     sl: parseFloat(sl.toFixed(5)),
+//     tp: parseFloat(tp.toFixed(5)),
+//   };
+// };
+
+// async function getAccountBalance() {
+//   if (currentBalance !== null) return currentBalance;
+//   return new Promise((resolve) => {
+//     const interval = setInterval(() => {
+//       if (currentBalance !== null) {
+//         clearInterval(interval);
+//         resolve(currentBalance);
+//       }
+//     }, 500);
+//   });
+// }
+
+// // Normalisierungsfunktion (keine Änderung – erwartet numeric values)
+// const normalizePrice = (symbol, rawPrice) => {
+//   const factor = symbol.includes("JPY") ? 1000 : 100000;
+//   return parseFloat((rawPrice / factor).toFixed(5));
+// };
+
+// const getPipMultiplier = () => 0.0001;
+
+// // Abrufen historischer Daten (Live-Daten)
+// const getHistoricalData = async (symbol, timeframe) => {
+//   try {
+//     console.log(`Fetching historical data for ${symbol} on timeframe ${timeframe}`);
+//     const result = await x.getPriceHistory({
+//       symbol,
+//       period: timeframe,
+//       socketId: getSocketId(),
+//     });
+
+//     if (!result || !result.candles) {
+//       console.error(`No historical data returned for ${symbol}`);
+//       return [];
+//     }
+
+//     return result.candles.map((candle) => ({
+//       timestamp: candle.timestamp,
+//       close: normalizePrice(symbol, candle.close),
+//       high: normalizePrice(symbol, candle.high),
+//       low: normalizePrice(symbol, candle.low),
+//     }));
+//   } catch (err) {
+//     console.error(`Error fetching historical data for ${symbol}:`, err);
+//     return [];
+//   }
+// };
+
+// const getCurrentPrice = async (symbol) => {
+//   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
+//   if (candles.length === 0) return null;
+//   const closes = candles.map((c) => c.close);
+//   return closes[closes.length - 1];
+// };
+
+// // Positionsgrößenberechnung (wie bisher)
+// function calculatePositionSize(accountBalance, riskPerTrade, stopLossPips, symbol) {
+//   const pipMultiplier = getPipMultiplier(symbol);
+//   const factor = symbol.includes("JPY") ? 1000 : 100000;
+//   const riskAmount = accountBalance * riskPerTrade;
+//   return riskAmount / (stopLossPips * (pipMultiplier * factor));
+// }
+
+// // Signal-Generierung (wie im Backtesting – EMA und MACD)
+// const generateSignal = async (symbol, timeframe) => {
+//   const candles = await getHistoricalData(symbol, timeframe);
+//   if (candles.length < 50) return null; // Mindestanzahl an Kerzen
+//   const closes = candles.map((c) => c.close);
+//   const fastEMA = calculateEMA(closes, CONFIG.fastEMA);
+//   const slowEMA = calculateEMA(closes, CONFIG.slowEMA);
+//   const macd = calculateMACD(closes);
+//   const entryRaw = closes[closes.length - 1];
+
+//   console.log(
+//     `Signal for ${symbol}: fastEMA=${fastEMA.toFixed(5)}, slowEMA=${slowEMA.toFixed(5)}, MACD Histogram=${macd.histogram.toFixed(5)}`
+//   );
+
+//   if (fastEMA > slowEMA && macd.histogram > 0) {
+//     return { signal: "BUY", entryRaw };
+//   } else if (fastEMA < slowEMA && macd.histogram < 0) {
+//     return { signal: "SELL", entryRaw };
+//   }
+//   return null;
+// };
+
+// // --- Trendbestimmung auf M15 mittels MACD ---
+// const checkTrendM15 = async (symbol) => {
+//   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M15);
+//   if (!candles.length) {
+//     console.error(`No M15 data for ${symbol}`);
+//     return null;
+//   }
+//   const closes = candles.map((c) => c.close);
+//   const macdResult = calculateMACD(closes);
+//   // Trendbestimmung: Histogram > 0 => BUY, sonst SELL
+//   const trend = macdResult.histogram > 0 ? "BUY" : "SELL";
+//   console.log(`M15 MACD Trend for ${symbol}: ${trend} (Histogram: ${macdResult.histogram.toFixed(5)})`);
+//   return trend;
+// };
+// // Multi-Timeframe-Analyse: Zusätzlich wird der H1-Trend (als Filter) geprüft
+// const checkMultiTimeframeSignal = async (symbol) => {
+//   const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastEMA, CONFIG.slowEMA);
+//   if (!signalM1) {
+//     console.error(`Not enough data or no valid signal for ${symbol} on M1`);
+//     return null;
+//   }
+//   // const trendM15 = await checkTrendM15(symbol);
+//   // if (!trendM15) return null;
+
+//   // if (signalM1.signal === trendM15) {
+//   //   return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+//   // } else {
+//   //   console.log(`M1/M15 Conflict: ${signalM1.signal} vs ${trendM15}`);
+//   //   return null;
+//   // }
+
+//   // // Nur wenn das M1-Signal mit dem M15-Trend übereinstimmt, wird das Signal weitergereicht
+//   // if (signalM1.signal === trendM15) {
+//   //   console.log(`Consistent signal for ${symbol}: ${signalM1.signal}`);
+//   //   return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+//   // } else {
+//   //   console.log(`Inconsistent signal for ${symbol}: M1=${signalM1.signal} vs. M15=${trendM15}`);
+//   //   return null;
+//   // }
+
+//   if (signalM1.signal) {
+//     return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+//   }
+//   console.error(`Trens widerspricht dem M1 Signal für ${symbol}`);
+//   return null;
+// };
+
+// // Execute live trade using backtested logic and calculated position size
+// // const executeTradeForSymbol = async (symbol, direction, rawPrice, lotSize) => {
+// //   const spread = 0.0002;
+// //   const entry = direction === "BUY" ? rawPrice + spread : rawPrice;
+
+// //   // ATR-based dynamic SL/TP using the last 15 M1 candles
+// //   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
+// //   const atr = calculateATR(candles.slice(-15));
+// //   let sl, tp;
+// //   if (atr) {
+// //     const dynamic = calculateDynamicSLTP(entry, atr, direction === "BUY");
+// //     sl = dynamic.sl;
+// //     tp = dynamic.tp;
+// //   } else {
+// //     sl =
+// //       direction === "BUY"
+// //         ? parseFloat((entry - CONFIG.stopLossPips * 0.0001).toFixed(5))
+// //         : parseFloat((entry + CONFIG.stopLossPips * 0.0001).toFixed(5));
+// //     tp =
+// //       direction === "BUY"
+// //         ? parseFloat((entry + CONFIG.takeProfitPips * 0.0001).toFixed(5))
+// //         : parseFloat((entry - CONFIG.takeProfitPips * 0.0001).toFixed(5));
+// //   }
+
+// //   console.log(`Executing ${direction} trade for ${symbol}: Entry=${entry}, SL=${sl}, TP=${tp}, Lot Size=${lotSize}`);
+
+// //   try {
+// //     const order = await x.Socket.send.tradeTransaction({
+// //       cmd: direction === "BUY" ? 0 : 1,
+// //       customComment: `Live Trade Order for ${symbol}`,
+// //       expiration: Date.now() + 3600000,
+// //       offset: 0,
+// //       order: 0,
+// //       price: entry,
+// //       sl: sl,
+// //       tp: tp,
+// //       symbol: symbol,
+// //       type: 0,
+// //       volume: lotSize,
+// //     });
+// //     console.log(`${direction} order executed for ${symbol} at ${entry}`, order);
+// //   } catch (error) {
+// //     console.error(`Failed to execute ${direction} trade for ${symbol}:`, error);
+// //   }
+// // };
+
+// // Orderausführung: Nutzt den aktuellen Marktpreis als Basis und normalisiert die Preise korrekt
+// async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
+//   const factor = symbol.includes("JPY") ? 1000 : 100000;
+//   const pipMultiplier = getPipMultiplier(symbol);
+//   const spreadRaw = 0.0002 * factor;
+//   const rawEntry = direction === "BUY" ? rawPrice + spreadRaw : rawPrice;
+//   const entry = normalizePrice(symbol, rawEntry);
+//   const rawSL = direction === "BUY"
+//     ? rawEntry - CONFIG.stopLossPips * (pipMultiplier * factor)
+//     : rawEntry + CONFIG.stopLossPips * (pipMultiplier * factor);
+//   const rawTP = direction === "BUY"
+//     ? rawEntry + CONFIG.takeProfitPips * (pipMultiplier * factor)
+//     : rawEntry - CONFIG.takeProfitPips * (pipMultiplier * factor);
+//   const sl = normalizePrice(symbol, rawSL);
+//   const tp = normalizePrice(symbol, rawTP);
+
+//   console.log(`Executing ${direction} trade for ${symbol}: entry=${entry}, SL=${sl}, TP=${tp}`);
+//   console.log("entry:", entry, "stop loss:", sl, "take profit:", tp);
+
+//   try {
+//     const order = await x.Socket.send.tradeTransaction({
+//       cmd: direction === "BUY" ? 0 : 1,
+//       customComment: `Scalping Bot Order for ${symbol}`,
+//       expiration: Date.now() + 3600000,
+//       offset: 0,
+//       order: 0,
+//       price: entry,
+//       sl: sl,
+//       tp: tp,
+//       symbol: symbol,
+//       type: 0,
+//       volume: lotSize,
+//     });
+//     console.log(`${direction} order executed for ${symbol} at ${entry}, order:`, order);
+//   } catch (error) {
+//     console.error(`Failed to execute ${direction} trade for ${symbol}:`, error);
+//   }
+// }
+// // Neue Funktion: Gibt die Anzahl offener Trades für ein bestimmtes Symbol zurück
+// const getOpenPositionsForSymbol = async (symbol) => {
+//   return new Promise((resolve) => {
+//     x.Stream.listen.getTrades((data) => {
+//       const trades = Array.isArray(data) ? data : [data];
+//       const openTradesForSymbol = trades.filter((t) => t && !t.closed && t.symbol === symbol);
+//       console.log(`Open positions for ${symbol}:`, openTradesForSymbol);
+//       resolve(openTradesForSymbol.length);
+//     });
+//   }).catch((err) => {
+//     console.error("Error fetching open positions for", symbol, ":", err);
+//     return 0;
+//   });
+// };
+
+// const getOpenPositionsCount = async () => {
+//   try {
+//     const trades = await new Promise((resolve) => {
+//       x.Stream.listen.getTrades((data) => {
+//         const trades = Array.isArray(data) ? data : [data];
+//         resolve(trades);
+//       });
+//     });
+//     const openTrades = trades.filter((t) => t && !t.closed);
+//     console.log("Open positions update:", openTrades);
+//     return openTrades.length;
+//   } catch (err) {
+//     console.error("Error fetching open positions:", err);
+//     return 0;
+//   }
+// };
+
+// // Live Trading Logik, die die Backtesting-Signal- und Exit-Logik integriert
+// const checkAndTradeForSymbol = async (symbol) => {
+//   // Check if there is already an open trade for this symbol
+//   // const openPositionsForSymbol = await getOpenPositionsForSymbol(symbol);
+//   // if (openPositionsForSymbol >= 1) {
+//   //   console.log(`Trade for ${symbol} is already open. Skipping new trade.`);
+//   //   return;
+//   // }
+//   // const openPositions = await getOpenPositionsCount();
+//   // if (openPositions >= 5) {
+//   //   console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
+//   //   return;
+//   // }
+
+//   // Hole Signal aus den letzten 50 M1-Kerzen
+//   const signalData = await generateSignal(symbol, CONFIG.timeframe.M1);
+//   if (!signalData) {
+//     console.log(`No valid signal for ${symbol}`);
+//     return;
+//   }
+//   const entryRaw = signalData.entryRaw;
+//   console.log(`Signal for ${symbol}: ${signalData.signal} at price ${entryRaw}`);
+
+//   // Für ein Live-Trading könnte man eine feste SL/TP-Berechnung (wie unten) vornehmen:
+//   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
+//   const atr = calculateATR(candles.slice(-15));
+
+//   let sl, tp;
+//   if (atr) {
+//     sl =
+//       signalData.signal === "BUY"
+//         ? parseFloat((entryRaw - CONFIG.stopLossPips * 0.0001).toFixed(5))
+//         : parseFloat((entryRaw + CONFIG.stopLossPips * 0.0001).toFixed(5));
+
+//     tp =
+//       signalData.signal === "BUY"
+//         ? parseFloat((entryRaw + CONFIG.takeProfitPips * 0.0001).toFixed(5))
+//         : parseFloat((entryRaw - CONFIG.takeProfitPips * 0.0001).toFixed(5));
+//   }
+
+//   console.log(`Trade details for ${symbol}: Entry=${entryRaw}, SL=${sl}, TP=${tp}`);
+
+//   // Berechne Positionsgröße
+//   const balance = await getAccountBalance();
+//   if (!balance) {
+//     console.error("Balance not available.");
+//     return;
+//   }
+//   // const lotSize = Math.max(0.01, Math.min(10, calculatePositionSize(balance, CONFIG.riskPerTrade, CONFIG.stopLossPips, symbol)));
+
+//   const positionSize = calculatePositionSize(balance, CONFIG.riskPerTrade, CONFIG.stopLossPips, symbol);
+//   console.log(`Placing ${signalData.signal} trade for ${symbol} with lot size: ${positionSize}`);
+//   await executeTradeForSymbol(symbol, signalData.signal, entryRaw, positionSize);
+// };
+
+// const checkAllPairsAndTrade = async () => {
+//   for (let symbol of Object.values(CONFIG.symbols)) {
+//     await checkAndTradeForSymbol(symbol);
+//   }
+// };
+
+// const startBot = async () => {
+//   try {
+//     await connectXAPI();
+//     // Abonniere Streams
+//     await Promise.all([
+//       // x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed")),
+//       x.Stream.subscribe
+//         .getTrades()
+//         .then(() => console.log("Trades-Stream subscribed"))
+//         .catch((err) => console.error("Error subscribing trades:", err)),
+//       x.Stream.subscribe
+//         .getBalance()
+//         .then(() => console.log("Balance-Stream subscribed"))
+//         .catch((err) => console.error("Error subscribing balance:", err)),
+//     ]);
+//     // Listener registrieren
+//     x.Stream.listen.getTrades((data) => {
+//       if (data) {
+//         // Optional: hier können Trade-Daten geloggt werden
+//       } else {
+//         console.error("no trades data:", data);
+//       }
+//     });
+//     x.Stream.listen.getBalance((data) => {
+//       if (data && data.balance !== undefined) {
+//         currentBalance = data.balance;
+//         console.log("Balance updated:", currentBalance);
+//       } else {
+//         console.error("Invalid balance data:", data);
+//       }
+//     });
+
+//     // Hier kannst du den Live-Trading-Loop starten (z. B. alle 60 Sekunden)
+
+//     // --- Backtesting für alle Paare ---
+//     // await backtestStrategy(
+//     //   CONFIG.symbols.EURUSD,
+//     //   CONFIG.timeframe.M1,
+//     //   Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000),
+//     //   Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000)
+//     // );
+
+//     setInterval(async () => {
+//       if (isMarketOpen()) {
+//         await checkAllPairsAndTrade();
+//       } else {
+//         console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
+//       }
+//     }, 10000);
+
+//     console.log("Bot is live...");
+//   } catch (error) {
+//     console.error("Error:", error);
+//   }
+// };
+
+// const isMarketOpen = () => {
+//   const now = new Date();
+//   const day = now.getUTCDay();
+//   const hour = now.getUTCHours();
+
+//   // Forex Marktzeiten (UTC):
+//   // Sydney: 22:00-06:00
+//   // Tokyo: 00:00-09:00
+//   // London: 08:00-17:00
+//   // New York: 13:00-22:00
+//   return (
+//     day >= 1 &&
+//     day <= 5 &&
+//     (hour >= 22 ||
+//       hour < 6 || // Sydney
+//       (hour >= 0 && hour < 9) || // Tokyo
+//       (hour >= 8 && hour < 17) || // London
+//       (hour >= 13 && hour < 22)) // New York
+//   );
+// };
+
+// startBot();
+
+require("dotenv").config();
+
+const XAPI = require("xapi-node").default;
+const { TYPE_FIELD, CMD_FIELD } = XAPI;
+
+// 1. Konfiguration
+const CONFIG = {
+  symbols: {
+    EURUSD: "EURUSD",
+    GBPUSD: "GBPUSD",
+    USDJPY: "USDJPY",
+    AUDUSD: "AUDUSD",
+    EURGBP: "EURGBP",
+  },
+  timeframe: {
+    M1: 1,
+    M5: 5,
+    M15: 15,
+    H1: 60,
+    H4: 240,
+    D1: 1440,
+  },
+  fastMA: 5,      // EMA-Schnellperiode
+  slowMA: 20,     // EMA-Langperiode
+  stopLossPips: 20,   // Stop-Loss in Pips
+  takeProfitPips: 40, // Take-Profit in Pips
+  riskPerTrade: 0.02, // 2% Risiko pro Trade
+};
+// Für Nicht-JPY gehen wir von 5 Dezimalstellen aus
+const pipValue = 0.1;
+
+// 2. Authentifizierung mit XAPI
+const x = new XAPI({
+  accountId: process.env.DEMO_ACCOUNT_ID,
+  password: process.env.DEMO_PASSWORD,
+  type: "demo",
 });
 
+const socketId = x.Socket.getSocketId();
 let currentBalance = null;
-let currentTrades = [];
 
-// Dynamische SL/TP-Berechnung mit ATR (wie im Backtesting)
-const calculateDynamicSLTP = (entryRaw, atr, isBuy) => {
-  const slDistance = atr * CONFIG.atrMultiplierSL;
-  const tpDistance = atr * CONFIG.atrMultiplierTP;
-  return isBuy ? { sl: entryRaw - slDistance, tp: entryRaw + tpDistance } : { sl: entryRaw + slDistance, tp: entryRaw - tpDistance };
+// Kontostand (wird über den Balance‑Stream aktualisiert)
+const getAccountBalance = async () => {
+  if (currentBalance !== null) {
+    return currentBalance;
+  } else {
+    console.error("Balance noch nicht verfügbar!");
+    return null;
+  }
 };
 
-async function getAccountBalance() {
-  if (currentBalance !== null) return currentBalance;
-  return new Promise((resolve) => {
-    const interval = setInterval(() => {
-      if (currentBalance !== null) {
-        clearInterval(interval);
-        resolve(currentBalance);
-      }
-    }, 500);
-  });
+// Berechnung einfacher gleitender Durchschnitte
+function calculateSMA(prices, period) {
+  if (prices.length < period) return null;
+  return prices.slice(-period).reduce((sum, price) => sum + price, 0) / period;
 }
 
-// Normalisierungsfunktion (keine Änderung – erwartet numeric values)
-const normalizePrice = (symbol, rawPrice) => {
-  const factor = symbol.includes("JPY") ? 1000 : 100000;
-  return parseFloat((rawPrice / factor).toFixed(5));
+function calculateEMA(prices, period) {
+  if (prices.length < period) return null;
+  const k = 2 / (period + 1);
+  let ema = calculateSMA(prices.slice(0, period), period);
+  for (let i = period; i < prices.length; i++) {
+    ema = prices[i] * k + ema * (1 - k);
+  }
+  return ema;
+}
+
+// Berechnung MACD (mit Standardparametern 12,26,9)
+function calculateMACD(prices, shortPeriod = 12, longPeriod = 26, signalPeriod = 9) {
+  let macdValues = [];
+  for (let i = longPeriod - 1; i < prices.length; i++) {
+    const shortSlice = prices.slice(i - shortPeriod + 1, i + 1);
+    const longSlice = prices.slice(i - longPeriod + 1, i + 1);
+    const emaShort = calculateEMA(shortSlice, shortPeriod);
+    const emaLong = calculateEMA(longSlice, longPeriod);
+    macdValues.push(emaShort - emaLong);
+  }
+  // Signallinie als EMA der MACD-Werte
+  const signalLine = calculateEMA(macdValues, signalPeriod);
+  const histogram = macdValues[macdValues.length - 1] - signalLine;
+  return { macdLine: macdValues[macdValues.length - 1], signalLine, histogram };
+}
+
+// Berechnung des RSI (Standardperiode 14)
+function calculateRSI(prices, period = 14) {
+  if (prices.length < period + 1) return null;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) gains += change;
+    else losses -= change;
+  }
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
+// Verbindung herstellen
+const connect = async () => {
+  try {
+    await x.connect();
+    console.log("Connection established");
+  } catch (error) {
+    console.error("Error:", error);
+    throw error;
+  }
 };
 
-const getPipMultiplier = () => 0.0001;
-
-// Abrufen historischer Daten (Live-Daten)
+// Historische Daten abrufen (Candles)
 const getHistoricalData = async (symbol, timeframe) => {
   try {
-    const result = await x.getPriceHistory({
-      symbol,
-      period: timeframe,
-      socketId: getSocketId(),
-    });
-    if (result && result.candles) {
-      return result.candles.map((candle) => ({
-        timestamp: candle.timestamp, // Zum Debuggen
-        close: normalizePrice(symbol, candle.close),
-        high: normalizePrice(symbol, candle.high),
-        low: normalizePrice(symbol, candle.low),
-      }));
-    } else {
-      return [];
-    }
+    const result = await x.getPriceHistory({ symbol, period: timeframe });
+    return result && result.candles ? result.candles : [];
   } catch (err) {
     console.error("Error in getHistoricalData:", err);
     return [];
   }
 };
 
+// Aktuellen Marktpreis (letzte Kerze im M1) abrufen
 const getCurrentPrice = async (symbol) => {
   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
   if (candles.length === 0) return null;
-  const closes = candles.map((c) => c.close);
+  const closes = candles.map(c => c.close);
   return closes[closes.length - 1];
 };
 
-// Positionsgrößenberechnung (wie bisher)
-const calculatePositionSize = (accountBalance, riskPerTrade, stopLossPips) => {
-  const pipMultiplier = getPipMultiplier();
-  const riskAmount = accountBalance * riskPerTrade;
-  return riskAmount / (stopLossPips * pipMultiplier);
-};
+// Normalisierungsfunktion: Wandelt Rohpreise in den tatsächlichen Kurs um
+function normalizePrice(symbol, rawPrice) {
+  const factor = symbol.includes("JPY") ? 1000 : 100000;
+  return parseFloat((rawPrice / factor).toFixed(5));
+}
 
-// Signal-Generierung (wie im Backtesting – EMA und MACD)
-const generateSignal = async (symbol, timeframe) => {
+// Liefert den Pip-Multiplikator
+function getPipMultiplier(symbol) {
+  return symbol.includes("JPY") ? 0.01 : 0.0001;
+}
+
+// Handelssignal prüfen – hier werden EMA, MACD und RSI als Filter genutzt
+const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) => {
   const candles = await getHistoricalData(symbol, timeframe);
-  if (candles.length < 50) return null; // Mindestanzahl an Kerzen
-  const closes = candles.map((c) => c.close);
-  const fastEMA = calculateEMA(closes, CONFIG.fastEMA);
-  const slowEMA = calculateEMA(closes, CONFIG.slowEMA);
-  const macd = calculateMACD(closes);
-  const entryRaw = closes[closes.length - 1];
-
-  console.log(`Signal for ${symbol}: fastEMA=${fastEMA.toFixed(5)}, slowEMA=${slowEMA.toFixed(5)}, MACD Histogram=${macd.histogram.toFixed(5)}`);
-
-  if (fastEMA > slowEMA && macd.histogram > 0) {
-    return { signal: "BUY", entryRaw };
-  } else if (fastEMA < slowEMA && macd.histogram < 0) {
-    return { signal: "SELL", entryRaw };
-  }
-  return null;
-};
-
-// --- Trendbestimmung auf M15 mittels MACD ---
-const checkTrendM15 = async (symbol) => {
-  const candles = await getHistoricalData(symbol, CONFIG.timeframe.M15);
-  if (!candles.length) {
-    console.error(`No M15 data for ${symbol}`);
+  if (candles.length === 0) {
+    console.error(`No data for ${symbol}`);
     return null;
   }
-  const closes = candles.map((c) => c.close);
-  const macdResult = calculateMACD(closes);
-  // Trendbestimmung: Histogram > 0 => BUY, sonst SELL
-  const trend = macdResult.histogram > 0 ? "BUY" : "SELL";
-  console.log(`M15 MACD Trend for ${symbol}: ${trend} (Histogram: ${macdResult.histogram.toFixed(5)})`);
-  return trend;
+  const closes = candles.map(c => c.close);
+  const emaFast = calculateEMA(closes, fastPeriod);
+  const emaSlow = calculateEMA(closes, slowPeriod);
+  const lastPrice = closes[closes.length - 1];
+
+  // Berechne MACD und RSI (nutze die letzten 50 Candles für bessere Stabilität)
+  const recentCloses = closes.slice(-50);
+  const macdData = calculateMACD(recentCloses);
+  const rsiValue = calculateRSI(recentCloses);
+
+  console.log(
+    `[${symbol} - TF ${timeframe}] emaFast=${emaFast}, emaSlow=${emaSlow}, rawLastPrice=${lastPrice}, MACD hist=${macdData.histogram}, RSI=${rsiValue}`
+  );
+  // Signalbestimmung:
+  // BUY, wenn EMA-Bedingung, MACD-Histogramm > 0 und RSI < 70
+  // SELL, wenn EMA-Bedingung, MACD-Histogramm < 0 und RSI > 30
+  if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
+    return { signal: "BUY", rawPrice: lastPrice };
+  } else if (emaFast < emaSlow && macdData.histogram < 0 && rsiValue > 30) {
+    return { signal: "SELL", rawPrice: lastPrice };
+  } else {
+    return null;
+  }
 };
-// Multi-Timeframe-Analyse: Zusätzlich wird der H1-Trend (als Filter) geprüft
+
+// Multi-Timeframe-Analyse: Prüfe Signale für M1, M15 und H1
 const checkMultiTimeframeSignal = async (symbol) => {
-  const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastEMA, CONFIG.slowEMA);
-  if (!signalM1) {
-    console.error(`Not enough data or no valid signal for ${symbol} on M1`);
+  const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastMA, CONFIG.slowMA);
+  const signalM15 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M15, CONFIG.fastMA, CONFIG.slowMA);
+  const signalH1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.H1, CONFIG.fastMA, CONFIG.slowMA);
+  if (!signalM1 || !signalM15 || !signalH1) {
+    console.error(`Not enough data for ${symbol}`);
     return null;
   }
-  // const trendM15 = await checkTrendM15(symbol);
-  // if (!trendM15) return null;
-
-  // if (signalM1.signal === trendM15) {
-  //   return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
-  // } else {
-  //   console.log(`M1/M15 Conflict: ${signalM1.signal} vs ${trendM15}`);
-  //   return null;
-  // }
-
-  // // Nur wenn das M1-Signal mit dem M15-Trend übereinstimmt, wird das Signal weitergereicht
-  // if (signalM1.signal === trendM15) {
-  //   console.log(`Consistent signal for ${symbol}: ${signalM1.signal}`);
-  //   return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
-  // } else {
-  //   console.log(`Inconsistent signal for ${symbol}: M1=${signalM1.signal} vs. M15=${trendM15}`);
-  //   return null;
-  // }
-
-  if (signalM1.signal) {
+  if (signalM1.signal === signalM15.signal && signalM15.signal === signalH1.signal) {
     return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
   }
-  console.error(`Trens widerspricht dem M1 Signal für ${symbol}`);
   return null;
 };
 
-// Live Trade-Ausführung: Integriert die Backtesting-Logik
-const executeTradeForSymbol = async (symbol, direction, rawPrice, lotSize) => {
-  const spread = 0.0002; // Fester Spread
-  const entry = direction === "BUY" ? rawPrice + spread : rawPrice;
+// Berechnung der Lot-Größe (nur 1 Trade pro Währungspaar, max. 5 insgesamt)
+function calculatePositionSize(accountBalance, riskPerTrade, stopLossPips, symbol) {
+  const pipMultiplier = getPipMultiplier(symbol);
+  const factor = symbol.includes("JPY") ? 1000 : 100000;
+  const riskAmount = accountBalance * riskPerTrade;
+  return riskAmount / (stopLossPips * (pipMultiplier * factor));
+}
 
-  // ATR-Berechnung auf den letzten 15 M1-Kerzen
-  const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
-  const atr = calculateATR(candles.slice(-15));
-  let sl, tp;
-  if (atr) {
-    const dynamic = calculateDynamicSLTP(entry, atr, direction === "BUY");
-    sl = dynamic.sl;
-    tp = dynamic.tp;
-  } else {
-    // Fallback: feste SL/TP
-    const rawSL = direction === "BUY" ? entry - CONFIG.stopLossPips * 0.0001 : entry + CONFIG.stopLossPips * 0.0001;
-    const rawTP = direction === "BUY" ? entry + CONFIG.takeProfitPips * 0.0001 : entry - CONFIG.takeProfitPips * 0.0001;
-    sl = rawSL;
-    tp = rawTP;
-  }
+// Orderausführung: Nutzt den aktuellen Marktpreis als Basis und normalisiert die Preise korrekt
+async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
+  const factor = symbol.includes("JPY") ? 1000 : 100000;
+  const pipMultiplier = getPipMultiplier(symbol);
+  const spreadRaw = 0.0002 * factor;
+  const rawEntry = direction === "BUY" ? rawPrice + spreadRaw : rawPrice;
+  const entry = normalizePrice(symbol, rawEntry);
+  const rawSL = direction === "BUY"
+    ? rawEntry - CONFIG.stopLossPips * (pipMultiplier * factor)
+    : rawEntry + CONFIG.stopLossPips * (pipMultiplier * factor);
+  const rawTP = direction === "BUY"
+    ? rawEntry + CONFIG.takeProfitPips * (pipMultiplier * factor)
+    : rawEntry - CONFIG.takeProfitPips * (pipMultiplier * factor);
+  const sl = normalizePrice(symbol, rawSL);
+  const tp = normalizePrice(symbol, rawTP);
 
   console.log(`Executing ${direction} trade for ${symbol}: entry=${entry}, SL=${sl}, TP=${tp}`);
+  console.log("entry:", entry, "stop loss:", sl, "take profit:", tp);
 
   try {
     const order = await x.Socket.send.tradeTransaction({
       cmd: direction === "BUY" ? 0 : 1,
-      customComment: `Live Trade Order for ${symbol}`,
+      customComment: `Scalping Bot Order for ${symbol}`,
       expiration: Date.now() + 3600000,
       offset: 0,
       order: 0,
@@ -181,191 +640,123 @@ const executeTradeForSymbol = async (symbol, direction, rawPrice, lotSize) => {
       type: 0,
       volume: lotSize,
     });
-    console.log(`${direction} order executed for ${symbol} at ${entry}`, order);
+    console.log(`${direction} order executed for ${symbol} at ${entry}, order:`, order);
   } catch (error) {
     console.error(`Failed to execute ${direction} trade for ${symbol}:`, error);
   }
-};
+}
 
-// Neue Funktion: Gibt die Anzahl offener Trades für ein bestimmtes Symbol zurück
-const getOpenPositionsForSymbol = async (symbol) => {
+// Offene Positionen abrufen (als Promise verpackt)
+async function getOpenPositionsCount() {
   return new Promise((resolve) => {
     x.Stream.listen.getTrades((data) => {
+      // Wir gehen davon aus, dass data entweder ein Array oder ein einzelnes Objekt ist
       const trades = Array.isArray(data) ? data : [data];
-      const openTradesForSymbol = trades.filter((t) => t && !t.closed && t.symbol === symbol);
-      console.log(`Open positions for ${symbol}:`, openTradesForSymbol);
-      resolve(openTradesForSymbol.length);
+      const openTrades = trades.filter(t => t && !t.closed);
+      console.log("Open positions update:", openTrades);
+      resolve(openTrades.length);
     });
   }).catch((err) => {
-    console.error("Error fetching open positions for", symbol, ":", err);
-    return 0;
-  });
-};
-
-const getOpenPositionsCount = async () => {
-  try {
-    const trades = await new Promise((resolve) => {
-      x.Stream.listen.getTrades((data) => {
-        const trades = Array.isArray(data) ? data : [data];
-        resolve(trades);
-      });
-    });
-    const openTrades = trades.filter((t) => t && !t.closed);
-    console.log("Open positions update:", openTrades);
-    return openTrades.length;
-  } catch (err) {
     console.error("Error fetching open positions:", err);
     return 0;
-  }
-};
+  });
+}
 
-// Live Trading Logik, die die Backtesting-Signal- und Exit-Logik integriert
-const checkAndTradeForSymbol = async (symbol) => {
-  // Hole Signal aus den letzten 50 M1-Kerzen
-  const signalData = await generateSignal(symbol, CONFIG.timeframe.M1);
+// Für jedes Symbol prüfen und ggf. einen Trade auslösen (max. 1 Trade pro Symbol)
+async function checkAndTradeForSymbol(symbol) {
+  const signalData = await checkMultiTimeframeSignal(symbol);
   if (!signalData) {
-    console.log(`No valid signal for ${symbol}`);
+    console.log(`No consistent multi-timeframe signal for ${symbol}`);
     return;
   }
-  const entryRaw = signalData.entryRaw;
-  console.log(`Signal for ${symbol}: ${signalData.signal} at price ${entryRaw}`);
+  console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
 
-  // console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
-  // const openPositionsForSymbol = await getOpenPositionsForSymbol(symbol);
-  // if (openPositionsForSymbol >= 1) {
-  //   console.log(`Trade for ${symbol} is already open. Skipping new trade.`);
-  //   return;
-  // }
-  // const openPositions = await getOpenPositionsCount();
-  // if (openPositions >= 5) {
-  //   console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
-  //   return;
-  // }
-
-  // Hier könnte man zusätzliche Logik für Exit (z.B. Trailing Stop) implementieren
-  // Für ein Live-Trading könnte man eine feste SL/TP-Berechnung (wie unten) vornehmen:
-  const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
-  const atr = calculateATR(candles.slice(-15));
-  let sl, tp;
-  if (atr) {
-    const dynamic = calculateDynamicSLTP(entryRaw, atr, signalData.signal === "BUY");
-    sl = dynamic.sl;
-    tp = dynamic.tp;
-  } else {
-    sl = signalData.signal === "BUY" ? entryRaw - CONFIG.stopLossPips * 0.0001 : entryRaw + CONFIG.stopLossPips * 0.0001;
-    tp = signalData.signal === "BUY" ? entryRaw + CONFIG.takeProfitPips * 0.0001 : entryRaw - CONFIG.takeProfitPips * 0.0001;
+  // Prüfe, ob bereits ein Trade für dieses Symbol offen ist
+  const openPositions = await getOpenPositionsCount();
+  if (openPositions >= 5) {
+    console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
+    return;
   }
 
-  console.log(`Trade details for ${symbol}: Entry=${entryRaw}, SL=${sl}, TP=${tp}`);
+  const currentRawPrice = await getCurrentPrice(symbol);
+  console.log(`Current market price for ${symbol}: ${currentRawPrice}`);
 
-  // Berechne Positionsgröße
   const balance = await getAccountBalance();
   if (!balance) {
-    console.error("Balance not available.");
+    console.error("Couldn't check balance!");
     return;
   }
 
-  const riskPerTrade = CONFIG.riskPerTrade || 0.02;
-  console.log("CONFIG.riskPerTrade", CONFIG.riskPerTrade);
+  const positionSize = calculatePositionSize(balance, CONFIG.riskPerTrade, CONFIG.stopLossPips, symbol);
+  console.log(`Placing ${signalData.signal} trade for ${symbol} with lot size: ${positionSize}`);
+  await executeTradeForSymbol(symbol, signalData.signal, currentRawPrice, positionSize);
+}
 
-  console.log(`Placing ${signalData.signal} trade for ${symbol} with lot size: ${riskPerTrade}`);
-
-  // Führe den Trade aus
-  await executeTradeForSymbol(symbol, signalData.signal, entryRaw, riskPerTrade);
-};
-
-const checkAllPairsAndTrade = async () => {
+// Iteriere über alle definierten Symbole und prüfe einzeln
+async function checkAllPairsAndTrade() {
   for (let symbol of Object.values(CONFIG.symbols)) {
     await checkAndTradeForSymbol(symbol);
   }
-};
+}
 
 const tick = async () => {
   x.Stream.listen.getTickPrices((data) => {
     console.log("gotten:", data);
     return data;
   });
-  n;
 };
 
+// Main function
 const startBot = async () => {
   try {
-    await connectXAPI();
-    // Abonniere Streams
-    await Promise.all([
-      // x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed")),
-      x.Stream.subscribe
-        .getTrades()
-        .then(() => console.log("Trades-Stream subscribed"))
-        .catch((err) => console.error("Error subscribing trades:", err)),
-      x.Stream.subscribe
-        .getBalance()
-        .then(() => console.log("Balance-Stream subscribed"))
-        .catch((err) => console.error("Error subscribing balance:", err)),
-    ]);
+    await connect();
+
+    // Streams abonnieren
+    x.Stream.subscribe.getBalance()
+      .then(() => console.log("Balance-Stream abonniert"))
+      .catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err));
+    x.Stream.subscribe.getTickPrices("EURUSD")
+      .catch(() => console.error("subscribe for EURUSD failed"));
+    x.Stream.subscribe.getTrades()
+      .then(() => console.log("Trades-Stream abonniert"))
+      .catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err));
+
     // Listener registrieren
-    x.Stream.listen.getTrades((data) => {
-      if (data) {
-        // Optional: hier können Trade-Daten geloggt werden
-      } else {
-        console.error("no trades data:", data);
-      }
-    });
     x.Stream.listen.getBalance((data) => {
       if (data && data.balance !== undefined) {
         currentBalance = data.balance;
         console.log("Balance updated:", currentBalance);
       } else {
-        console.error("Invalid balance data:", data);
+        console.error("Ungültige Balance-Daten:", data);
       }
     });
-    // Warte auf den ersten Balance-Wert
-    const initialBalance = await getAccountBalance();
-    console.log("Initial balance:", initialBalance);
 
-    // Hier kannst du den Live-Trading-Loop starten (z. B. alle 60 Sekunden)
-
-    // --- Backtesting für alle Paare ---
-    // await backtestStrategy(
-    //   CONFIG.symbols.EURUSD,
-    //   CONFIG.timeframe.M1,
-    //   Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000),
-    //   Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000)
-    // );
-
-    setInterval(async () => {
-      if (isMarketOpen()) {
-        await checkAllPairsAndTrade();
+    x.Stream.listen.getTrades((data) => {
+      if (data) {
+        console.log("trades:", data);
       } else {
-        console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
+        console.error("no trades data:", data);
       }
+    });
+
+    // Starte Überprüfung der Handelssignale alle 60 Sekunden
+    setInterval(async () => {
+      await checkAllPairsAndTrade();
     }, 10000);
 
-    console.log("Bot is live...");
+    const historicalData = await getHistoricalData(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1);
+    if (historicalData.length === 0) {
+      console.error("No historical data downloaded!");
+      return;
+    }
+    const closes = historicalData.map((candle) => candle.close);
+    console.log("Historical data loaded:", closes.length, "candles");
+
+    console.log("Bot läuft...");
   } catch (error) {
     console.error("Error:", error);
+    throw error;
   }
-};
-
-const isMarketOpen = () => {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const hour = now.getUTCHours();
-
-  // Forex Marktzeiten (UTC):
-  // Sydney: 22:00-06:00
-  // Tokyo: 00:00-09:00
-  // London: 08:00-17:00
-  // New York: 13:00-22:00
-  return (
-    day >= 1 &&
-    day <= 5 &&
-    (hour >= 22 ||
-      hour < 6 || // Sydney
-      (hour >= 0 && hour < 9) || // Tokyo
-      (hour >= 8 && hour < 17) || // London
-      (hour >= 13 && hour < 22)) // New York
-  );
 };
 
 startBot();
