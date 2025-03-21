@@ -484,3 +484,12 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
     return null;
   }
 };
+
+
+
+const tick = async () => {
+  x.Stream.listen.getTickPrices((data) => {
+    console.log("gotten:", data);
+    return data;
+  });
+};
