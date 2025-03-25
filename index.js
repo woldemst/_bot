@@ -327,44 +327,11 @@
 // startBot();
 
 require("dotenv").config();
+const { x, connectXAPI, getSocketId } = require("./xapi.js");
+const { calculateEMA, calculateMACD, calculateATR } = require("./indicators");
+const { CONFIG } = require("./config");
 
-const XAPI = require("xapi-node").default;
-const { TYPE_FIELD, CMD_FIELD } = XAPI;
 
-// 1. Konfiguration
-const CONFIG = {
-  symbols: {
-    EURUSD: "EURUSD",
-    GBPUSD: "GBPUSD",
-    USDJPY: "USDJPY",
-    AUDUSD: "AUDUSD",
-    EURGBP: "EURGBP",
-  },
-  timeframe: {
-    M1: 1,
-    M5: 5,
-    M15: 15,
-    H1: 60,
-    H4: 240,
-    D1: 1440,
-  },
-  fastMA: 5, // EMA-Schnellperiode
-  slowMA: 20, // EMA-Langperiode
-  stopLossPips: 20, // Stop-Loss in Pips
-  takeProfitPips: 40, // Take-Profit in Pips
-  riskPerTrade: 0.02, // 2% Risiko pro Trade
-};
-// Für Nicht-JPY gehen wir von 5 Dezimalstellen aus
-const pipValue = 0.1;
-
-// 2. Authentifizierung mit XAPI
-const x = new XAPI({
-  accountId: process.env.DEMO_ACCOUNT_ID,
-  password: process.env.DEMO_PASSWORD,
-  type: "demo",
-});
-
-const socketId = x.Socket.getSocketId();
 let currentBalance = null;
 
 // Kontostand (wird über den Balance‑Stream aktualisiert)
@@ -377,65 +344,7 @@ const getAccountBalance = async () => {
   }
 };
 
-// Berechnung einfacher gleitender Durchschnitte
-function calculateSMA(prices, period) {
-  if (prices.length < period) return null;
-  return prices.slice(-period).reduce((sum, price) => sum + price, 0) / period;
-}
 
-function calculateEMA(prices, period) {
-  if (prices.length < period) return null;
-  const k = 2 / (period + 1);
-  let ema = calculateSMA(prices.slice(0, period), period);
-  for (let i = period; i < prices.length; i++) {
-    ema = prices[i] * k + ema * (1 - k);
-  }
-  return ema;
-}
-
-// Berechnung MACD (mit Standardparametern 12,26,9)
-function calculateMACD(prices, shortPeriod = 12, longPeriod = 26, signalPeriod = 9) {
-  let macdValues = [];
-  for (let i = longPeriod - 1; i < prices.length; i++) {
-    const shortSlice = prices.slice(i - shortPeriod + 1, i + 1);
-    const longSlice = prices.slice(i - longPeriod + 1, i + 1);
-    const emaShort = calculateEMA(shortSlice, shortPeriod);
-    const emaLong = calculateEMA(longSlice, longPeriod);
-    macdValues.push(emaShort - emaLong);
-  }
-  // Signallinie als EMA der MACD-Werte
-  const signalLine = calculateEMA(macdValues, signalPeriod);
-  const histogram = macdValues[macdValues.length - 1] - signalLine;
-  return { macdLine: macdValues[macdValues.length - 1], signalLine, histogram };
-}
-
-// Berechnung des RSI (Standardperiode 14)
-function calculateRSI(prices, period = 14) {
-  if (prices.length < period + 1) return null;
-  let gains = 0,
-    losses = 0;
-  for (let i = 1; i <= period; i++) {
-    const change = prices[i] - prices[i - 1];
-    if (change > 0) gains += change;
-    else losses -= change;
-  }
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
-}
-
-// Verbindung herstellen
-const connect = async () => {
-  try {
-    await x.connect();
-    console.log("Connection established");
-  } catch (error) {
-    console.error("Error:", error);
-    throw error;
-  }
-};
 
 // Historische Daten abrufen (Candles)
 const getHistoricalData = async (symbol, timeframe) => {
@@ -542,6 +451,8 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   console.log("entry:", entry, "stop loss:", sl, "take profit:", tp);
 
   try {
+    console.log(entry, sl, tp);
+    
     const order = await x.Socket.send.tradeTransaction({
       cmd: direction === "BUY" ? 0 : 1,
       customComment: `Scalping Bot Order for ${symbol}`,
@@ -552,7 +463,7 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
       sl: sl,
       tp: tp,
       symbol: symbol,
-      type: 0,
+      type: 0, // OPEN = 0, PENDING = 1, CLOSE = 2, MODIFY = 3, DELETE = 4,
       volume: lotSize,
     });
     console.log(`${direction} order executed for ${symbol} at ${entry}, order:`, order);
@@ -621,6 +532,30 @@ const tick = async () => {
   });
 };
 
+const placeOrder = async () => {
+  const orderData = {
+    cmd: 0, // 0 for BUY
+    symbol: "EURUSD",
+    price: 1.08557, // already normalized value
+    sl: 1.07940,
+    tp: 1.08657,
+    volume: 1, // lot size as a normalized number (for non-JPY, you usually use lots directly)
+    expiration: Date.now() + 3600000, // 1 hour from now
+    offset: 0,
+    order: 0,
+    customComment: "Scalping Bot Order for EURUSD",
+  };
+
+  await x.Socket.send
+    .tradeTransaction(orderData)
+    .then((result) => {
+      console.log("Order executed:", result);
+    })
+    .catch((err) => {
+      console.error("Order failed:", err);
+    });
+};
+
 // Main function
 const startBot = async () => {
   try {
@@ -659,14 +594,7 @@ const startBot = async () => {
     setInterval(async () => {
       await checkAllPairsAndTrade();
     }, 10000);
-
-    const historicalData = await getHistoricalData(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1);
-    if (historicalData.length === 0) {
-      console.error("No historical data downloaded!");
-      return;
-    }
-    const closes = historicalData.map((candle) => candle.close);
-    console.log("Historical data loaded:", closes.length, "candles");
+    // await placeOrder();
 
     console.log("Bot läuft...");
   } catch (error) {
