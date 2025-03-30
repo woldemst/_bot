@@ -1,5 +1,5 @@
 // backtesting.js - Verbesserte Version
-const { x, getSocketId } = require("./xapi");
+const { x } = require("./xapi");
 const { calculateEMA, calculateMACD, calculateRSI, calculateATR, calculateBollingerBands } = require("./indicators");
 const { CONFIG } = require("./config");
 
@@ -55,7 +55,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
       symbol,
       period: timeframe,
       // start: startTimestamp,
-      socketId: getSocketId(),
+      // socketId: getSocketId(),
     });
   } catch (err) {
     console.error("Error during getPriceHistory:", err);

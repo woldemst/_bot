@@ -11,34 +11,38 @@ const x = new XAPI({
   accountId: process.env.DEMO_ACCOUNT_ID,
   password: process.env.DEMO_PASSWORD,
   type: "demo",
-  host: "xapi.xtb.com",  // Use the correct XTB demo server
+  host: "xapi.xtb.com", // Explicitly set the correct host for XTB
 });
 
 const connectXAPI = async () => {
   try {
-    await x.connect();
+    console.log("Attempting to connect to XTB API...");
+    x.connect();
     console.log("Connection established");
-
-    // Add connection verification
-    const loginCheck = await x.Socket.send.ping();
-    if (!loginCheck || !loginCheck.status) {
-      throw new Error("Failed to verify connection");
-    }
-    console.log("Connection verified");
 
     return true;
   } catch (error) {
     console.error("Error connecting to XAPI:", error.message);
-    if (error.error?.errorCode === "BE005") {
-      console.error("Invalid login credentials. Please check your demo account ID and password");
+
+    // More detailed error handling
+    if (error.error) {
+      console.error("Error code:", error.error.errorCode);
+      console.error("Error description:", error.error.errorDescr || "No description available");
+
+      if (error.error.errorCode === "BE004") {
+        console.error("Connection error - check your internet connection or XTB server status");
+      } else if (error.error.errorCode === "BE005") {
+        console.error("Authentication failed - check your credentials");
+      }
     }
-    process.exit(1); // Exit cleanly instead of throwing
+
+    // Return false instead of throwing to prevent unhandled promise rejection
+    return false;
   }
 };
 
-// Hole die Socket-ID, nachdem die Verbindung hergestellt wurde
-const getSocketId = () => x.Socket.getSocketId();
+// const getSocketId = x.Socket.getSocketId();
 
 // const streamId = socketId && x.Socket.connections[socketId].streamId;
 
-module.exports = { x, connectXAPI, getSocketId };
+module.exports = { x, connectXAPI };

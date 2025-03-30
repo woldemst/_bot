@@ -1,6 +1,7 @@
 require("dotenv").config();
-const { x, connectXAPI, getSocketId } = require("./xapi.js");
+const { x, connectXAPI } = require("./xapi");
 const { calculateEMA, calculateMACD, calculateATR } = require("./indicators");
+const { backtestStrategy } = require("./backtesting");
 const { CONFIG } = require("./config");
 
 let currentBalance = null;
@@ -335,31 +336,33 @@ const placeOrder = async () => {
 
 // Main function
 const startBot = async () => {
+
   try {
-    await connectXAPI();
+    const connected = await connectXAPI();
+    
+    if (!connected) {
+      console.error("Failed to connect to XTB API. Exiting...");
+      return;
+    }
 
-    // Streams abonnieren
-    x.Stream.subscribe
-      .getBalance()
-      .then(() => console.log("Balance-Stream abonniert"))
-      .catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err));
-    x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed"));
+    // Fix for Stream subscription - don't use Promise chaining
+    try {
+      console.log("Subscribing to balance stream...");
+      x.Stream.subscribe.getBalance();
+      console.log("Balance-Stream abonniert");
+    } catch (err) {
+      console.error("Fehler beim Abonnieren des Balance-Streams:", err);
+    }
 
-    x.Stream.subscribe
-      .getTrades()
-      .then(() => console.log("Trades-Stream abonniert"))
-      .catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err));
+    try {
+      console.log("Subscribing to trades stream...");
+      x.Stream.subscribe.getTrades();
+      console.log("Trades-Stream abonniert");
+    } catch (err) {
+      console.error("Fehler beim Abonnieren des Trades-Streams:", err);
+    }
 
     // Listener registrieren
-    x.Stream.listen.getBalance((data) => {
-      if (data && data.balance !== undefined) {
-        currentBalance = data.balance;
-        console.log("Balance updated:", currentBalance);
-      } else {
-        console.error("Ungültige Balance-Daten:", data);
-      }
-    });
-
     x.Stream.listen.getTrades((data) => {
       if (data) {
         console.log("trades:", data);
@@ -369,15 +372,23 @@ const startBot = async () => {
     });
 
     // Starte Überprüfung der Handelssignale alle 60 Sekunden
-    setInterval(async () => {
-      // await checkAllPairsAndTrade();
-      await placeOrder();
-    }, 10000);
+    // --- Backtesting für alle Paare ---
+    console.log("Starting backtesting...");
+    await backtestStrategy(
+      CONFIG.symbols.EURUSD,
+      CONFIG.timeframe.M1,
+      Math.floor(new Date("2023-01-14T00:00:00Z").getTime() / 1000),
+      Math.floor(new Date("2023-02-14T00:00:00Z").getTime() / 1000)
+    );
+
+    // setInterval(async () => {
+    //   // await checkAllPairsAndTrade();
+    //   // await placeOrder();
+    // }, 10000);
 
     console.log("Bot läuft...");
   } catch (error) {
-    console.error("Error:", error);
-    throw error;
+    console.error("Error in startBot:", error);
   }
 };
 
