@@ -17,30 +17,39 @@ const x = new XAPI({
 const connectXAPI = async () => {
   try {
     console.log("Attempting to connect to XTB API...");
-    x.connect();
+    // Add await here - this was missing
+    await x.connect();
     console.log("Connection established");
 
     return true;
   } catch (error) {
     console.error("Error connecting to XAPI:", error.message);
-
+    
     // More detailed error handling
     if (error.error) {
       console.error("Error code:", error.error.errorCode);
       console.error("Error description:", error.error.errorDescr || "No description available");
-
+      
       if (error.error.errorCode === "BE004") {
         console.error("Connection error - check your internet connection or XTB server status");
       } else if (error.error.errorCode === "BE005") {
         console.error("Authentication failed - check your credentials");
       }
     }
-
-    // Return false instead of throwing to prevent unhandled promise rejection
+    
     return false;
   }
 };
 
+// const connectXAPI = async () => {
+//   try {
+//     x.connect();
+//     console.log("Connection established");
+//   } catch (error) {
+//     console.error("Error connecting to XAPI:", error);
+//     throw error;
+//   }
+// };
 // const getSocketId = x.Socket.getSocketId();
 
 // const streamId = socketId && x.Socket.connections[socketId].streamId;
