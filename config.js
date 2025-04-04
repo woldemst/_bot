@@ -11,7 +11,8 @@ const CONFIG = {
     M15: 15,
     H1: 60,
   },
-  // Indikatorparameter
+  fastMA: 5,      // EMA-Schnellperiode
+  slowMA: 20,         // Indikatorparameter
   fastEMA: 8,        // Schneller EMA (Einstieg/Pullback)
   slowEMA: 21,       // Langsamer EMA (Trendfilter)
   macdShort: 12,
