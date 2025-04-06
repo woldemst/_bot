@@ -1,5 +1,5 @@
-// backtesting.js 
-const { x } = require("./xapi");
+// backtesting.js
+const { x, connectXAPI } = require("./xapi");
 const { calculateEMA, calculateMACD, calculateRSI, calculateATR, calculateBollingerBands } = require("./indicators");
 const { CONFIG } = require("./config");
 
@@ -12,28 +12,11 @@ const getPipMultiplier = (symbol) => {
   return symbol.includes("JPY") ? 0.01 : 0.0001;
 };
 
-
-const getHistoricalData = async (symbol, timeframe) => {
-  try {
-    if (!x.Socket) {
-      console.error("Socket not connected. Ensure connection is established before backtesting.");
-      return [];
-    }
-    const result = await x.getPriceHistory({ symbol, period: timeframe });
-    return result && result.candles ? result.candles : [];
-  } catch (err) {
-    console.error("Error in getHistoricalData:", err);
-    return [];
-  }
-};
-
-
 const generateSignal = (candles, symbol) => {
-
   if (candles.length < 50) return null;
   candles.forEach((candle) => {
     const date = new Date(candle.timestamp);
-    console.log(date.toISOString());
+    // console.log(date.toISOString());
   });
 
   // console.log("candles", candles);
@@ -60,25 +43,10 @@ const generateSignal = (candles, symbol) => {
   return null;
 };
 
-const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp) => {
-  // console.log(`\nBacktesting ${symbol} from ${new Date(startTimestamp)} to ${new Date(endTimestamp)}`);
+const backtestStrategy = async (symbol, candles) => {
+  // console.log("backtestStrategy", historicalData);
 
-  let allData;
-
-  try {
-    const allData = await getHistoricalData(symbol, timeframe);
-
-    if (!allData || allData.candles.length === 0) {
-      console.error("No historical data found.");
-      return;
-    }
-  } catch (err) {
-    console.error("Error during getPriceHistory:", err);
-    return [];
-  }
-
-  const candles = allData.candles;
-  console.log(`Backtesting: ${candles.length} candles loaded.`);
+  // console.log(`Backtesting: ${candles.length} candles loaded.`);
 
   candles.forEach((candle) => {
     candle.close = normalizePrice(symbol, candle.close);
