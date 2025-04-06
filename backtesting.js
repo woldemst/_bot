@@ -12,6 +12,21 @@ const getPipMultiplier = (symbol) => {
   return symbol.includes("JPY") ? 0.01 : 0.0001;
 };
 
+// Historische Daten abrufen (Candles)
+const getHistoricalData = async (symbol, timeframe) => {
+  try {
+    if (!x.Socket) {
+      console.error("Socket not connected. Ensure connection is established before backtesting.");
+      return [];
+    }
+    const result = await x.getPriceHistory({ symbol, period: timeframe });
+    return result && result.candles ? result.candles : [];
+  } catch (err) {
+    console.error("Error in getHistoricalData:", err);
+    return [];
+  }
+};
+
 // Verbesserte Signal-Generierung mit mehreren Indikatoren
 const generateSignal = (candles, symbol) => {
   // Brauchen mindestens 50 Kerzen für zuverlässige Berechnungen
@@ -49,23 +64,20 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
   // console.log(`\nBacktesting ${symbol} from ${new Date(startTimestamp)} to ${new Date(endTimestamp)}`);
 
   let allData;
-  
+
   try {
-    allData = await x.getPriceHistory({
-      symbol,
-      period: timeframe,
-      // start: startTimestamp,
-      // socketId: getSocketId(),
-    });
+    const allData = await getHistoricalData(symbol, timeframe);
+
+    if (!allData || allData.candles.length === 0) {
+      console.error("No historical data found.");
+      return;
+    }
   } catch (err) {
     console.error("Error during getPriceHistory:", err);
-    return;
+    return [];
   }
 
-  if (!allData || !allData.candles || allData.candles.length === 0) {
-    console.error("No historical data found.");
-    return;
-  }
+
 
   const candles = allData.candles;
   console.log(`Backtesting: ${candles.length} candles loaded.`);
