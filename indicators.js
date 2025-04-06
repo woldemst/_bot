@@ -40,7 +40,7 @@ const calculateATR = (candles, period = 14) => {
   
   const trueRanges = [];
   
-  // Berechne True Range für jede Kerze
+  // Calculate True Range for each candle
   for (let i = 1; i < candles.length; i++) {
     const prevClose = candles[i - 1].close;
     const { high, low } = candles[i];
@@ -53,10 +53,10 @@ const calculateATR = (candles, period = 14) => {
     trueRanges.push(tr);
   }
 
-  // Initialer ATR als einfacher Durchschnitt
+  // Initial ATR as simple average
   let atr = trueRanges.slice(0, period).reduce((a, b) => a + b, 0) / period;
   
-  // Glättung der nachfolgenden Werte
+  // Smoothing of subsequent values
   for (let i = period; i < trueRanges.length; i++) {
     atr = ((atr * (period - 1)) + trueRanges[i]) / period;
   }
@@ -78,21 +78,21 @@ const calculateBollingerBands = (prices, period, multiplier) => {
 const calculateRSI = (prices, period = 14) => {
   if (prices.length < period + 1) return null;
   
-  // Erste Periode: durchschnittliche Gewinne und Verluste berechnen
+  // First period: calculate average gains and losses
   let gains = 0, losses = 0;
   for (let i = 1; i <= period; i++) {
     const change = prices[i] - prices[i - 1];
     if (change > 0) {
       gains += change;
     } else {
-      losses -= change; // change ist negativ
+      losses -= change; // change is negative
     }
   }
   
   let avgGain = gains / period;
   let avgLoss = losses / period;
   
-  // Glättung für nachfolgende Perioden
+  // Smoothing for subsequent periods
   for (let i = period + 1; i < prices.length; i++) {
     const change = prices[i] - prices[i - 1];
     if (change > 0) {
@@ -104,7 +104,7 @@ const calculateRSI = (prices, period = 14) => {
     }
   }
   
-  // Falls avgLoss 0 ist, ist RSI 100 (starker Aufwärtstrend)
+  // If avgLoss is 0, RSI is 100 (strong uptrend)
   if (avgLoss === 0) return 100;
   
   const rs = avgGain / avgLoss;

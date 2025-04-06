@@ -1,4 +1,4 @@
-// backtesting.js - Verbesserte Version
+// backtesting.js 
 const { x } = require("./xapi");
 const { calculateEMA, calculateMACD, calculateRSI, calculateATR, calculateBollingerBands } = require("./indicators");
 const { CONFIG } = require("./config");
@@ -12,7 +12,7 @@ const getPipMultiplier = (symbol) => {
   return symbol.includes("JPY") ? 0.01 : 0.0001;
 };
 
-// Historische Daten abrufen (Candles)
+
 const getHistoricalData = async (symbol, timeframe) => {
   try {
     if (!x.Socket) {
@@ -27,9 +27,9 @@ const getHistoricalData = async (symbol, timeframe) => {
   }
 };
 
-// Verbesserte Signal-Generierung mit mehreren Indikatoren
+
 const generateSignal = (candles, symbol) => {
-  // Brauchen mindestens 50 Kerzen für zuverlässige Berechnungen
+
   if (candles.length < 50) return null;
   candles.forEach((candle) => {
     const date = new Date(candle.timestamp);
@@ -39,11 +39,11 @@ const generateSignal = (candles, symbol) => {
   // console.log("candles", candles);
   const closes = candles.map((c) => c.close);
 
-  // EMA-Kreuze
+  // EMA
   const fastEMA = calculateEMA(closes, CONFIG.fastEMA);
   const slowEMA = calculateEMA(closes, CONFIG.slowEMA);
 
-  // Trendindikatoren
+  // Trend identification
   const macd = calculateMACD(closes);
 
   const entryRaw = closes[closes.length - 1];
@@ -52,7 +52,7 @@ const generateSignal = (candles, symbol) => {
   if (fastEMA > slowEMA && macd.histogram > 0) {
     return { signal: "BUY", entryRaw };
   }
-  // SELL Signal: EMA-Kreuz + MACD + RSI + Bollinger Bands (überkauft)
+  // SELL Signal: EMA cross + MACD + RSI + Bollinger Bands (overbought)
   else if (fastEMA < slowEMA && macd.histogram < 0) {
     return { signal: "SELL", entryRaw };
   }
@@ -77,42 +77,39 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     return [];
   }
 
-
-
   const candles = allData.candles;
   console.log(`Backtesting: ${candles.length} candles loaded.`);
 
-  // Normalisiere Candle-Daten
   candles.forEach((candle) => {
     candle.close = normalizePrice(symbol, candle.close);
     candle.high = normalizePrice(symbol, candle.high);
     candle.low = normalizePrice(symbol, candle.low);
   });
 
-  // Nutze ein definiertes Startkapital
+  // Use defined starting capital
   let equity = CONFIG.initialCapital;
   const initialCapital = equity;
   const pipMultiplier = getPipMultiplier(symbol);
   const maxDrawdownPctLimit = CONFIG.maxDrawdownPctLimit || 20;
-  const maxDuration = CONFIG.maxTradeDurationCandles || 20; // Erhöhte maximale Dauer
+  const maxDuration = CONFIG.maxTradeDurationCandles || 20; // Increased maximum duration
   const trailingStopPips = CONFIG.trailingStopPips || 10;
 
   let trades = [];
   let equityCurve = [];
   let consecutiveLosses = 0;
 
-  // Trade-Filter basierend auf Marktbedingungen
+  // Trade filter based on market conditions
   const isVolatilityOK = (candles, i) => {
     if (i < 14) return false;
     const atr = calculateATR(candles.slice(i - 14, i + 1));
-    return atr > 0.0002; // Mindestvolatilität für Scalping
+    return atr > 0.0002; // Minimum volatility for scalping
   };
 
-  // Zeit-Filter: Haupthandelszeiten (vereinfacht)
+  // Time filter: Main trading hours (simplified)
   const isGoodTradingHour = (timestamp) => {
     const date = new Date(timestamp);
     const hour = date.getUTCHours();
-    // London (8-16 UTC) und NY (13-21 UTC) Überlappung für Liquidität
+    // London (8-16 UTC) and NY (13-21 UTC) overlap for liquidity
     return (hour >= 8 && hour < 16) || (hour >= 13 && hour < 21);
   };
 
@@ -122,7 +119,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     //   console.log("Maximum drawdown reached - stopping backtest.");
     //   break;
     // }
-    // Zusätzliche Filter
+    // Additional filters
     // if (!isVolatilityOK(candles, i)) continue;
     // if (!isGoodTradingHour(candles[i].ctm)) continue;
 
@@ -131,29 +128,24 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     if (!signalData) continue;
     const entryRaw = signalData.entryRaw;
 
-    // Dynamische SL/TP basierend auf ATR
+    // Dynamic SL/TP based on ATR
     const atr = calculateATR(slice);
     const atrMultiplierSL = CONFIG.atrMultiplierSL;
     const atrMultiplierTP = CONFIG.atrMultiplierTP;
 
-    // Dynamische Risiko/Reward basierend auf ATR
+    // Dynamic risk/reward based on ATR
     const slDistance = atr * atrMultiplierSL;
-
     const tpDistance = atr * atrMultiplierTP;
 
     // Min RR Check
     const expectedRR = tpDistance / slDistance;
     if (expectedRR < CONFIG.minRR || expectedRR < 1.5) continue;
-    // console.log("expectedRR:", CONFIG.minRR);
-
-    // console.log("entryRaw:", entryRaw);
 
     let exitRaw = null;
     let exitReason = null;
     let durationCandles = 0;
     let highestPrice = signalData.signal === "BUY" ? entryRaw : null;
     let lowestPrice = signalData.signal === "SELL" ? entryRaw : null;
-    // console.log("highestPrice:", highestPrice);
 
     // Initial SL & TP
     let currentSL = signalData.signal === "BUY" ? entryRaw - slDistance : entryRaw + slDistance;
@@ -169,24 +161,24 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
       const normLow = candle.low;
       const normHigh = candle.high;
 
-      // Update höchster/niedrigster Preis für Trailing Stop
+      // Update highest/lowest price for Trailing Stop
       if (signalData.signal === "BUY") {
         if (normHigh > highestPrice) {
           highestPrice = normHigh;
 
-          // Trailing Stop aktivieren wenn Gewinn > 50% von TP
+          // Activate Trailing Stop when profit > 50% of TP
           if (highestPrice > entryRaw + tpDistance * 0.5) {
             trailingStopActivated = true;
-            // Neuer Trail Stop: Höchstpreis minus X Pips
+            // New Trail Stop: Highest price minus X pips
             const newTrailingStop = highestPrice - trailingStopPips * pipMultiplier;
-            // Nur anpassen wenn höher als aktueller Stop
+            // Only adjust if higher than current stop
             if (newTrailingStop > trailingStopLevel) {
               trailingStopLevel = newTrailingStop;
             }
           }
         }
 
-        // SL Check - entweder initial oder trailing
+        // SL Check - either initial or trailing
         const effectiveSL = trailingStopActivated ? trailingStopLevel : currentSL;
 
         if (normLow <= effectiveSL) {
@@ -205,19 +197,19 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
         if (normLow < lowestPrice || lowestPrice === null) {
           lowestPrice = normLow;
 
-          // Trailing Stop aktivieren wenn Gewinn > 50% von TP
+          // Activate Trailing Stop when profit > 50% of TP
           if (lowestPrice < entryRaw - tpDistance * 0.5) {
             trailingStopActivated = true;
-            // Neuer Trail Stop: Tiefstpreis plus X Pips
+            // New Trail Stop: Lowest price plus X pips
             const newTrailingStop = lowestPrice + trailingStopPips * pipMultiplier;
-            // Nur anpassen wenn niedriger als aktueller Stop
+            // Only adjust if lower than current stop
             if (trailingStopLevel === null || newTrailingStop < trailingStopLevel) {
               trailingStopLevel = newTrailingStop;
             }
           }
         }
 
-        // SL Check - entweder initial oder trailing
+        // SL Check - either initial or trailing
         const effectiveSL = trailingStopActivated ? trailingStopLevel : currentSL;
 
         if (normHigh >= effectiveSL) {
@@ -235,7 +227,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
       }
     }
 
-    // Keine Regel getroffen - schließen zum Ende der Periode
+    // No rule hit - close at end of period
     if (exitRaw === null) {
       exitRaw = candles[Math.min(i + maxDuration, candles.length - 1)].close;
       exitReason = "EndOfPeriod";
@@ -244,12 +236,12 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
 
     const profitRaw = signalData.signal === "BUY" ? exitRaw - entryRaw : entryRaw - exitRaw;
 
-    // NaN-Check
+    // NaN Check
     if (isNaN(profitRaw)) continue;
 
     const profitPct = (profitRaw / entryRaw) * 100;
 
-    // Risikomanagement: Setze consecutiveLosses
+    // Risk Management: Set consecutiveLosses
     if (profitRaw <= 0) {
       consecutiveLosses++;
     } else {
@@ -272,21 +264,21 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
       usedTrailing: trailingStopActivated,
     });
 
-    // Position sizing (einfachheitshalber feste Größe)
+    // Position sizing (fixed size for simplicity)
     const riskAmount = initialCapital * (CONFIG.riskPerTrade || 0.02);
     const pipsRisked = slDistance / pipMultiplier;
     const positionSize = riskAmount / pipsRisked;
 
-    // Profit auf Konto anwenden
-    equity += profitRaw * (positionSize * 100000); // Skalieren des Profits
+    // Apply profit to account
+    equity += profitRaw * (positionSize * 100000); // Scale profit
     equityCurve.push(parseFloat(equity.toFixed(2)));
 
-    // Nach jedem Trade: Prüfe auf zu große Drawdowns und Volumen
-    // Warte mindestens X Kerzen nach jedem Trade
+    // After each trade: Check for large drawdowns and volume
+    // Wait at least X candles after each trade
     i += CONFIG.waitCandlesAfterTrade || 5;
   }
 
-  // Berechne Kennzahlen
+  // Calculate metrics
   const totalTrades = trades.length;
   const wins = trades.filter((t) => t.profit > 0).length;
   const losses = totalTrades - wins;
@@ -296,28 +288,28 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
   const avgProfit = totalTrades ? totalProfit / totalTrades : 0;
   const avgProfitPct = totalTrades ? totalProfitPct / totalTrades : 0;
 
-  // Aufschlüsselung nach Exit-Grund
+  // Breakdown by exit reason
   const exitsByReason = {};
   trades.forEach((trade) => {
     exitsByReason[trade.exitReason] = (exitsByReason[trade.exitReason] || 0) + 1;
   });
 
-  // Berechne Drawdown und weitere Metriken
+  // Calculate drawdown and additional metrics
   let maxDrawdown = 0;
   let peak = initialCapital;
   let currentDrawdown = 0;
   let maxConsecutiveLosses = 0;
   let currentConsecutiveLosses = 0;
 
-  // Profit-Faktor berechnen
+  // Calculate profit factor
   const grossProfit = trades.filter((t) => t.profit > 0).reduce((sum, t) => sum + t.profit, 0);
   const grossLoss = Math.abs(trades.filter((t) => t.profit < 0).reduce((sum, t) => sum + t.profit, 0));
-  const profitFactor = grossLoss === 0 ? "Unendlich" : (grossProfit / grossLoss).toFixed(2);
+  const profitFactor = grossLoss === 0 ? "Infinite" : (grossProfit / grossLoss).toFixed(2);
 
-  // Sortiere Trades nach Datum
+  // Sort trades by date
   trades.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-  // Berechne erweiterte Metriken
+  // Calculate extended metrics
   for (let i = 0; i < trades.length; i++) {
     const trade = trades[i];
 
@@ -332,7 +324,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     }
   }
 
-  // Berechne Drawdown aus Equity-Kurve
+  // Calculate drawdown from equity curve
   for (let i = 0; i < equityCurve.length; i++) {
     if (equityCurve[i] > peak) {
       peak = equityCurve[i];
@@ -349,7 +341,7 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
   const avgDuration = totalTrades ? trades.reduce((sum, t) => sum + t.duration, 0) / totalTrades : 0;
   const avgRR = totalTrades ? trades.reduce((sum, t) => sum + parseFloat(t.rrRatio), 0) / totalTrades : 0;
 
-  // Berechne Sharpe Ratio (annualisiert mit angenommener Standardabweichung)
+  // Calculate Sharpe Ratio (annualized with assumed standard deviation)
   const returns = [];
   let prevEquity = initialCapital;
   for (let i = 0; i < equityCurve.length; i++) {
@@ -360,36 +352,36 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
 
   const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
   const stdDeviation = Math.sqrt(returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length);
-  const sharpeRatio = stdDeviation ? (avgReturn / stdDeviation) * Math.sqrt(252) : 0; // Annualisiert mit 252 Handelstagen
+  const sharpeRatio = stdDeviation ? (avgReturn / stdDeviation) * Math.sqrt(252) : 0; // Annualized with 252 trading days
 
-  // Detaillierte Ergebnisse ausgeben
-  console.log(`\nBacktesting Ergebnisse für ${symbol}:`);
-  console.log(`Gesamtzahl Trades: ${totalTrades}`);
-  console.log(`Gewinnende Trades: ${wins} (${winRate.toFixed(2)}%)`);
-  console.log(`Verlierende Trades: ${losses} (${(100 - winRate).toFixed(2)}%)`);
-  console.log(`Gesamtgewinn: ${totalProfit.toFixed(2)}€ (${totalProfitPct.toFixed(2)}%)`);
-  console.log(`Durchschnittlicher Gewinn pro Trade: ${avgProfit.toFixed(2)}€ (${avgProfitPct.toFixed(2)}%)`);
-  console.log(`Maximaler Drawdown: ${maxDrawdown.toFixed(2)}€ (${maxDrawdownPct.toFixed(2)}%)`);
-  console.log(`Durchschnittliche Trade-Dauer (Kerzen): ${avgDuration.toFixed(2)}`);
-  console.log(`Durchschnittliches Risiko-Ertrags-Verhältnis: ${avgRR.toFixed(2)}`);
-  console.log(`Profit-Faktor: ${profitFactor}`);
-  console.log(`Sharpe Ratio (annualisiert): ${sharpeRatio.toFixed(2)}`);
-  console.log(`Maximale aufeinanderfolgende Verluste: ${maxConsecutiveLosses}`);
-  console.log(`Exit-Gründe:`, exitsByReason);
+  // Output detailed results
+  console.log(`\nBacktesting Results for ${symbol}:`);
+  console.log(`Total Trades: ${totalTrades}`);
+  console.log(`Winning Trades: ${wins} (${winRate.toFixed(2)}%)`);
+  console.log(`Losing Trades: ${losses} (${(100 - winRate).toFixed(2)}%)`);
+  console.log(`Total Profit: ${totalProfit.toFixed(2)}€ (${totalProfitPct.toFixed(2)}%)`);
+  console.log(`Average Profit per Trade: ${avgProfit.toFixed(2)}€ (${avgProfitPct.toFixed(2)}%)`);
+  console.log(`Maximum Drawdown: ${maxDrawdown.toFixed(2)}€ (${maxDrawdownPct.toFixed(2)}%)`);
+  console.log(`Average Trade Duration (Candles): ${avgDuration.toFixed(2)}`);
+  console.log(`Average Risk-Reward Ratio: ${avgRR.toFixed(2)}`);
+  console.log(`Profit Factor: ${profitFactor}`);
+  console.log(`Sharpe Ratio (annualized): ${sharpeRatio.toFixed(2)}`);
+  console.log(`Maximum Consecutive Losses: ${maxConsecutiveLosses}`);
+  console.log(`Exit Reasons:`, exitsByReason);
 
-  // Stichprobe der Trades ausgeben
-  console.log("\nStichprobe der ersten 5 Trades:");
+  // Output trade sample
+  console.log("\nSample of first 5 trades:");
   console.log(trades.slice(0, 5));
 
-  console.log("\nStichprobe der letzten 5 Trades:");
+  console.log("\nSample of last 5 trades:");
   console.log(trades.slice(-5));
 
-  console.log("\nEquity-Kurve (Start, Mitte, Ende):");
+  console.log("\nEquity Curve (Start, Middle, End):");
   console.log("Start:", equityCurve.slice(0, 3));
-  console.log("Mitte:", equityCurve.slice(Math.floor(equityCurve.length / 2) - 1, Math.floor(equityCurve.length / 2) + 2));
-  console.log("Ende:", equityCurve.slice(-3));
+  console.log("Middle:", equityCurve.slice(Math.floor(equityCurve.length / 2) - 1, Math.floor(equityCurve.length / 2) + 2));
+  console.log("End:", equityCurve.slice(-3));
 
-  // Handelsintervalle analysieren
+  // Analyze trading intervals
   let tradesByHour = {};
   let tradesByDay = {};
 
@@ -398,28 +390,28 @@ const backtestStrategy = async (symbol, timeframe, startTimestamp, endTimestamp)
     const hour = date.getHours();
     const day = date.getDay();
 
-    // Stunde
+    // Hour
     tradesByHour[hour] = tradesByHour[hour] || { total: 0, wins: 0 };
     tradesByHour[hour].total++;
     if (trade.profit > 0) tradesByHour[hour].wins++;
 
-    // Tag
+    // Day
     tradesByDay[day] = tradesByDay[day] || { total: 0, wins: 0 };
     tradesByDay[day].total++;
     if (trade.profit > 0) tradesByDay[day].wins++;
   });
 
-  console.log("\nHandelsverteilung nach Stunden:");
+  console.log("\nTrade Distribution by Hour:");
   Object.keys(tradesByHour).forEach((hour) => {
     const data = tradesByHour[hour];
-    console.log(`${hour}:00 Uhr - ${data.total} Trades, ${((data.wins / data.total) * 100).toFixed(2)}% Gewinnrate`);
+    console.log(`${hour}:00 - ${data.total} Trades, ${((data.wins / data.total) * 100).toFixed(2)}% Win Rate`);
   });
 
-  console.log("\nHandelsverteilung nach Wochentagen:");
-  const dayNames = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+  console.log("\nTrade Distribution by Weekday:");
+  const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   Object.keys(tradesByDay).forEach((day) => {
     const data = tradesByDay[day];
-    console.log(`${dayNames[day]} - ${data.total} Trades, ${((data.wins / data.total) * 100).toFixed(2)}% Gewinnrate`);
+    console.log(`${dayNames[day]} - ${data.total} Trades, ${((data.wins / data.total) * 100).toFixed(2)}% Win Rate`);
   });
 
   return {
