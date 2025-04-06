@@ -11,30 +11,30 @@ const CONFIG = {
     M15: 15,
     H1: 60,
   },
-  fastMA: 5,      // EMA-Schnellperiode
-  slowMA: 20,         // Indikatorparameter
-  fastEMA: 8,        // Schneller EMA (Einstieg/Pullback)
-  slowEMA: 21,       // Langsamer EMA (Trendfilter)
+  fastMA: 5,      // Fast EMA period
+  slowMA: 20,     // Indicator parameter
+  fastEMA: 8,     // Fast EMA (Entry/Pullback)
+  slowEMA: 21,    // Slow EMA (Trend filter)
   macdShort: 12,
   macdLong: 26,
   macdSignal: 9,
   rsiPeriod: 14,
-  // RSI-Schwellen (optional, hier als zusätzlicher Filter)
+  // RSI thresholds (optional, used as additional filter)
   rsiBuyThreshold: 30,   // LONG: RSI < 30
   rsiSellThreshold: 70,  // SHORT: RSI > 70
-  // Feste SL/TP als Fallback
+  // Fixed SL/TP as fallback
   stopLossPips: 5,
   takeProfitPips: 10,
-  riskPerTrade: 0.02, // 2% Risiko pro Trade
-  // Dynamische SL/TP via ATR
+  riskPerTrade: 0.02, // 2% risk per trade
+  // Dynamic SL/TP via ATR
   atrMultiplierSL: 1.5,
   atrMultiplierTP: 2.0,
-  // Bollinger-Band-Parameter (für erweiterte Strategie)
+  // Bollinger Bands parameters (for advanced strategy)
   bbPeriod: 20,
   bbMultiplier: 2,
-  // Pullback: Maximale Abweichung zum schnellen EMA (z.B. 0,25%)
+  // Pullback: Maximum deviation from fast EMA (e.g., 0.25%)
   maxDistancePct: 0.0025,
-  // Backtesting-Parameter
+  // Backtesting parameters
   maxTradeDurationCandles: 10,
   maxDrawdownPctLimit: 20,
   minRR: 2.0,

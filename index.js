@@ -1,15 +1,11 @@
 require("dotenv").config();
 const { calculateEMA, calculateMACD, calculateRSI } = require("./indicators");
 const { backtestStrategy } = require("./backtesting");
-
-const XAPI = require("xapi-node").default;
 const { CONFIG } = require("./config");
-
 const { x, connectXAPI } = require("./xapi");
 
 let currentBalance = null;
 
-// Kontostand (wird über den Balance‑Stream aktualisiert)
 const getAccountBalance = async () => {
   if (currentBalance !== null) {
     console.log("Using cached balance:", currentBalance);
@@ -26,7 +22,7 @@ const getAccountBalance = async () => {
   }
 };
 
-// Historische Daten abrufen (Candles)
+// get historical data (Candles)
 const getHistoricalData = async (symbol, timeframe) => {
   try {
     const result = await x.getPriceHistory({ symbol, period: timeframe });
@@ -37,7 +33,7 @@ const getHistoricalData = async (symbol, timeframe) => {
   }
 };
 
-// Aktuellen Marktpreis (letzte Kerze im M1) abrufen
+// actual price of last candle (M1) 
 const getCurrentPrice = async (symbol) => {
   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
   if (candles.length === 0) return null;
@@ -45,18 +41,18 @@ const getCurrentPrice = async (symbol) => {
   return closes[closes.length - 1];
 };
 
-// Normalisierungsfunktion: Wandelt Rohpreise in den tatsächlichen Kurs um
+// Converts raw prices into actual exchange rates
 function normalizePrice(symbol, rawPrice) {
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   return parseFloat((rawPrice / factor).toFixed(5));
 }
 
-// Liefert den Pip-Multiplikator
+// Returns the pip multiplier
 function getPipMultiplier(symbol) {
   return symbol.includes("JPY") ? 0.01 : 0.0001;
 }
 
-// Handelssignal prüfen – hier werden EMA, MACD und RSI als Filter genutzt
+// Check trading signal - using EMA, MACD and RSI as filters
 const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) => {
   const candles = await getHistoricalData(symbol, timeframe);
   if (candles.length === 0) {
@@ -68,7 +64,7 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   const emaSlow = calculateEMA(closes, slowPeriod);
   const lastPrice = closes[closes.length - 1];
 
-  // Berechne MACD und RSI (nutze die letzten 50 Candles für bessere Stabilität)
+  // Calculate MACD and RSI (using the last 50 candles for better stability)
   const recentCloses = closes.slice(-50);
   const macdData = calculateMACD(recentCloses);
   const rsiValue = calculateRSI(recentCloses);
@@ -76,9 +72,9 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   console.log(
     `[${symbol} - TF ${timeframe}] emaFast=${emaFast}, emaSlow=${emaSlow}, rawLastPrice=${lastPrice}, MACD hist=${macdData.histogram}, RSI=${rsiValue}`
   );
-  // Signalbestimmung:
-  // BUY, wenn EMA-Bedingung, MACD-Histogramm > 0 und RSI < 70
-  // SELL, wenn EMA-Bedingung, MACD-Histogramm < 0 und RSI > 30
+  // Signal determination:
+  // BUY when EMA condition, MACD histogram > 0 and RSI < 70
+  // SELL when EMA condition, MACD histogram < 0 and RSI > 30
   if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
     return { signal: "BUY", rawPrice: lastPrice };
   } else if (emaFast < emaSlow && macdData.histogram < 0 && rsiValue > 30) {
@@ -88,7 +84,7 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
   }
 };
 
-// Multi-Timeframe-Analyse: Prüfe Signale für M1, M15 und H1
+// Multi-Timeframe Analysis: Check signals for M1, M15 and H1
 const checkMultiTimeframeSignal = async (symbol) => {
   const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastMA, CONFIG.slowMA);
   const signalM15 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M15, CONFIG.fastMA, CONFIG.slowMA);
@@ -103,7 +99,7 @@ const checkMultiTimeframeSignal = async (symbol) => {
   return null;
 };
 
-// Berechnung der Lot-Größe (nur 1 Trade pro Währungspaar, max. 5 insgesamt)
+// Calculate lot size (only 1 trade per currency pair, max 5 total)
 function calculatePositionSize(accountBalance, riskPerTrade, stopLossPips, symbol) {
   const pipMultiplier = getPipMultiplier(symbol);
   const factor = symbol.includes("JPY") ? 1000 : 100000;
@@ -111,7 +107,7 @@ function calculatePositionSize(accountBalance, riskPerTrade, stopLossPips, symbo
   return riskAmount / (stopLossPips * (pipMultiplier * factor));
 }
 
-// Orderausführung: Nutzt den aktuellen Marktpreis als Basis und normalisiert die Preise korrekt
+// Order execution: Uses current market price as basis and normalizes prices correctly
 async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   const pipMultiplier = getPipMultiplier(symbol);
@@ -152,11 +148,11 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   }
 }
 
-// Offene Positionen abrufen (als Promise verpackt)
+// Get open positions (wrapped in Promise)
 async function getOpenPositionsCount() {
   return new Promise((resolve) => {
     x.Stream.listen.getTrades((data) => {
-      // Wir gehen davon aus, dass data entweder ein Array oder ein einzelnes Objekt ist
+
       const trades = Array.isArray(data) ? data : [data];
       const openTrades = trades.filter((t) => t && !t.closed);
       console.log("Open positions update:", openTrades);
@@ -168,7 +164,7 @@ async function getOpenPositionsCount() {
   });
 }
 
-// Für jedes Symbol prüfen und ggf. einen Trade auslösen (max. 1 Trade pro Symbol)
+// Check each symbol and potentially trigger a trade (max. 1 trade per symbol)
 async function checkAndTradeForSymbol(symbol) {
   const signalData = await checkMultiTimeframeSignal(symbol);
   if (!signalData) {
@@ -177,7 +173,7 @@ async function checkAndTradeForSymbol(symbol) {
   }
   console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
 
-  // Prüfe, ob bereits ein Trade für dieses Symbol offen ist
+  // Check if a trade is already open for this symbol
   const openPositions = await getOpenPositionsCount();
   if (openPositions >= 5) {
     console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
@@ -198,37 +194,33 @@ async function checkAndTradeForSymbol(symbol) {
   await executeTradeForSymbol(symbol, signalData.signal, currentRawPrice, positionSize);
 }
 
-// Iteriere über alle definierten Symbole und prüfe einzeln
+// Iterate over all defined symbols and check individually
 async function checkAllPairsAndTrade() {
   for (let symbol of Object.values(CONFIG.symbols)) {
     await checkAndTradeForSymbol(symbol);
   }
 }
 
-const tick = async () => {
-  x.Stream.listen.getTickPrices((data) => {
-    console.log("gotten:", data);
-    return data;
-  });
-};
 
-// --- Backtesting für alle Paare ---
+
+// --- Backtesting ---
 const test = async () => {
   if (!x.Socket) {
     console.log("Establishing connection for backtesting...");
-    await connect(); // Make sure connection is established
+    await connect(); 
   }
   const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
   const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
   console.log("Starting backtest with connected socket...");
   await backtestStrategy(CONFIG.symbols.AUDUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
 };
+
 // Main function
 const startBot = async () => {
   try {
     await connectXAPI();
 
-    // Streams abonnieren
+    // Stream subscription
     try {
       await x.Stream.subscribe.getBalance();
       console.log("Balance-Stream abonniert");
@@ -247,7 +239,7 @@ const startBot = async () => {
     } catch (err) {
       console.error("Fehler beim Abonnieren des Trades-Streams:", err);
     }
-    // Listener registrieren
+    // Listener registration
     x.Stream.listen.getBalance((data) => {
       if (data && data.balance !== undefined) {
         currentBalance = data.balance;
@@ -269,9 +261,9 @@ const startBot = async () => {
     setTimeout(async () => {
       await getAccountBalance();
 
-      // setTimeout(async () => {
-      //   await test();
-      // }, 3000);
+      setTimeout(async () => {
+        await test();
+      }, 3000);
 
       // setInterval(async () => {
       //   if (isMarketOpen()) {
