@@ -1,40 +1,28 @@
 require("dotenv").config();
 const { calculateEMA, calculateMACD, calculateRSI } = require("./indicators");
+const { backtestStrategy } = require("./backtesting");
 
 const XAPI = require("xapi-node").default;
 const { CONFIG } = require("./config");
 
-//Authentifizierung mit XAPI
-const x = new XAPI({
-  accountId: process.env.DEMO_ACCOUNT_ID,
-  password: process.env.DEMO_PASSWORD,
-  type: "demo",
-});
+const { x, connectXAPI } = require("./xapi");
 
 let currentBalance = null;
 
 // Kontostand (wird über den Balance‑Stream aktualisiert)
 const getAccountBalance = async () => {
   if (currentBalance !== null) {
+    console.log("Using cached balance:", currentBalance);
     return currentBalance;
   } else {
-    console.error("Balance noch nicht verfügbar!");
-    return null;
-  }
-};
-
-
-
-
-
-// Verbindung herstellen
-const connect = async () => {
-  try {
-    await x.connect();
-    console.log("Connection established");
-  } catch (error) {
-    console.error("Error:", error);
-    throw error;
+    x.Stream.listen.getBalance((data) => {
+      if (data && data.balance !== undefined) {
+        currentBalance = data.balance;
+        console.log("Balance updated:", currentBalance);
+      } else {
+        console.error("Ungültige Balance-Daten:", data);
+      }
+    });
   }
 };
 
@@ -224,22 +212,41 @@ const tick = async () => {
   });
 };
 
+// --- Backtesting für alle Paare ---
+const test = async () => {
+  if (!x.Socket) {
+    console.log("Establishing connection for backtesting...");
+    await connect(); // Make sure connection is established
+  }
+  const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
+  const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
+  console.log("Starting backtest with connected socket...");
+  await backtestStrategy(CONFIG.symbols.AUDUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
+};
 // Main function
 const startBot = async () => {
   try {
-    await connect();
+    await connectXAPI();
 
     // Streams abonnieren
-    x.Stream.subscribe
-      .getBalance()
-      .then(() => console.log("Balance-Stream abonniert"))
-      .catch((err) => console.error("Fehler beim Abonnieren des Balance-Streams:", err));
-    x.Stream.subscribe.getTickPrices("EURUSD").catch(() => console.error("subscribe for EURUSD failed"));
-    x.Stream.subscribe
-      .getTrades()
-      .then(() => console.log("Trades-Stream abonniert"))
-      .catch((err) => console.error("Fehler beim Abonnieren des Trades-Streams:", err));
+    try {
+      await x.Stream.subscribe.getBalance();
+      console.log("Balance-Stream abonniert");
+    } catch (err) {
+      console.error("Fehler beim Abonnieren des Balance-Streams:", err);
+    }
+    try {
+      await x.Stream.subscribe.getTickPrices("EURUSD");
+    } catch (err) {
+      console.error("subscribe for EURUSD failed:", err);
+    }
 
+    try {
+      await x.Stream.subscribe.getTrades();
+      console.log("Trades-Stream abonniert");
+    } catch (err) {
+      console.error("Fehler beim Abonnieren des Trades-Streams:", err);
+    }
     // Listener registrieren
     x.Stream.listen.getBalance((data) => {
       if (data && data.balance !== undefined) {
@@ -258,24 +265,49 @@ const startBot = async () => {
       }
     });
 
-    // Starte Überprüfung der Handelssignale alle 60 Sekunden
-    setInterval(async () => {
-      await checkAllPairsAndTrade();
-    }, 10000);
+    console.log("Waiting for balance data...");
+    setTimeout(async () => {
+      await getAccountBalance();
 
-    const historicalData = await getHistoricalData(CONFIG.symbols.EURUSD, CONFIG.timeframe.M1);
-    if (historicalData.length === 0) {
-      console.error("No historical data downloaded!");
-      return;
-    }
-    const closes = historicalData.map((candle) => candle.close);
-    console.log("Historical data loaded:", closes.length, "candles");
+      // setTimeout(async () => {
+      //   await test();
+      // }, 3000);
 
-    console.log("Bot läuft...");
+      // setInterval(async () => {
+      //   if (isMarketOpen()) {
+      //     await checkAllPairsAndTrade();
+      //   } else {
+      //     console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
+      //   }
+      // }, 60000);
+
+      console.log("Bot läuft...");
+    }, 3000);
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error:", error); 
     throw error;
   }
+};
+
+const isMarketOpen = () => {
+  const now = new Date();
+  const day = now.getUTCDay();
+  const hour = now.getUTCHours();
+
+  // Forex Marktzeiten (UTC):
+  // Sydney: 22:00-06:00
+  // Tokyo: 00:00-09:00
+  // London: 08:00-17:00
+  // New York: 13:00-22:00
+  return (
+    day >= 1 &&
+    day <= 5 &&
+    (hour >= 22 ||
+      hour < 6 || // Sydney
+      (hour >= 0 && hour < 9) || // Tokyo
+      (hour >= 8 && hour < 17) || // London
+      (hour >= 13 && hour < 22)) // New York
+  );
 };
 
 startBot();

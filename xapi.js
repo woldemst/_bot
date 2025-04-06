@@ -11,7 +11,6 @@ const x = new XAPI({
   accountId: process.env.DEMO_ACCOUNT_ID,
   password: process.env.DEMO_PASSWORD,
   type: "demo",
-  host: "xapi.xtb.com", // Explicitly set the correct host for XTB
 });
 
 // const connectXAPI = async () => {
@@ -38,7 +37,7 @@ const x = new XAPI({
 
 const connectXAPI = async () => {
   try {
-    x.connect();
+    await x.connect();
     console.log("Connection established");
   } catch (error) {
     console.error("Error connecting to XAPI:", error);
@@ -49,4 +48,4 @@ const connectXAPI = async () => {
 
 // const streamId = socketId && x.Socket.connections[socketId].streamId;
 
-module.exports = { x, connectXAPI, getSocketId };
+module.exports = { x, connectXAPI };
