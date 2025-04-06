@@ -33,7 +33,7 @@ const getHistoricalData = async (symbol, timeframe) => {
   }
 };
 
-// actual price of last candle (M1) 
+// actual price of last candle (M1)
 const getCurrentPrice = async (symbol) => {
   const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
   if (candles.length === 0) return null;
@@ -152,7 +152,6 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
 async function getOpenPositionsCount() {
   return new Promise((resolve) => {
     x.Stream.listen.getTrades((data) => {
-
       const trades = Array.isArray(data) ? data : [data];
       const openTrades = trades.filter((t) => t && !t.closed);
       console.log("Open positions update:", openTrades);
@@ -201,18 +200,15 @@ async function checkAllPairsAndTrade() {
   }
 }
 
-
-
-// --- Backtesting ---
+// Backtesting
 const test = async () => {
-  if (!x.Socket) {
-    console.log("Establishing connection for backtesting...");
-    await connect(); 
-  }
-  const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
-  const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
-  console.log("Starting backtest with connected socket...");
-  await backtestStrategy(CONFIG.symbols.AUDUSD, CONFIG.timeframe.M1, startTimestamp, endTimestamp);
+  // const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
+  // const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
+  console.log("Waiting for testing data...");
+  setTimeout(async () => {
+    const historicalData = await getHistoricalData(CONFIG.symbols.AUDUSD, CONFIG.timeframe.M1);
+    await backtestStrategy(CONFIG.symbols.AUDUSD, historicalData);
+  }, 3000);
 };
 
 // Main function
@@ -223,9 +219,9 @@ const startBot = async () => {
     // Stream subscription
     try {
       await x.Stream.subscribe.getBalance();
-      console.log("Balance-Stream abonniert");
+      console.log("Balance stream subscribed");
     } catch (err) {
-      console.error("Fehler beim Abonnieren des Balance-Streams:", err);
+      console.error("Error subscribing to balance stream:", err);
     }
     try {
       await x.Stream.subscribe.getTickPrices("EURUSD");
@@ -235,17 +231,17 @@ const startBot = async () => {
 
     try {
       await x.Stream.subscribe.getTrades();
-      console.log("Trades-Stream abonniert");
+      console.log("Trades stream subscribed");
     } catch (err) {
-      console.error("Fehler beim Abonnieren des Trades-Streams:", err);
+      console.error("Error subscribing to trades stream:", err);
     }
     // Listener registration
     x.Stream.listen.getBalance((data) => {
       if (data && data.balance !== undefined) {
         currentBalance = data.balance;
-        console.log("Balance updated:", currentBalance);
+        // console.log("Balance updated:", currentBalance);
       } else {
-        console.error("Ungültige Balance-Daten:", data);
+        console.error("Cannot update the balance", data);
       }
     });
 
@@ -257,26 +253,26 @@ const startBot = async () => {
       }
     });
 
-    console.log("Waiting for balance data...");
-    setTimeout(async () => {
-      await getAccountBalance();
+    // console.log("Waiting for balance data...");
+    // setTimeout(async () => {
+    // await getAccountBalance();
+    // setInterval(async () => {
+    //   if (isMarketOpen()) {
+    //     await checkAllPairsAndTrade();
+    //   } else {
+    //     console.log("Market is closed. No trades will be placed.");
+    //     return; // Exit the function if the market is closed to avoid placing trades during this time
+    //   }
+    // }, 60000);
 
-      setTimeout(async () => {
-        await test();
-      }, 3000);
+    // console.log("Bot started...");
+    // }, 3000);
 
-      // setInterval(async () => {
-      //   if (isMarketOpen()) {
-      //     await checkAllPairsAndTrade();
-      //   } else {
-      //     console.log("Markt geschlossen. Handel wird nicht ausgeführt.");
-      //   }
-      // }, 60000);
+    //just for testing
+    await test();
 
-      console.log("Bot läuft...");
-    }, 3000);
   } catch (error) {
-    console.error("Error:", error); 
+    console.error("Error:", error);
     throw error;
   }
 };
