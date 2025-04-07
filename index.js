@@ -53,37 +53,6 @@ function getPipMultiplier(symbol) {
 }
 
 // Check trading signal - using EMA, MACD and RSI as filters
-const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) => {
-  const candles = await getHistoricalData(symbol, timeframe);
-  if (candles.length === 0) {
-    console.error(`No data for ${symbol}`);
-    return null;
-  }
-  const closes = candles.map((c) => c.close);
-  const emaFast = calculateEMA(closes, fastPeriod);
-  const emaSlow = calculateEMA(closes, slowPeriod);
-  const lastPrice = closes[closes.length - 1];
-
-  // Calculate MACD and RSI (using the last 50 candles for better stability)
-  const recentCloses = closes.slice(-50);
-  const macdData = calculateMACD(recentCloses);
-  const rsiValue = calculateRSI(recentCloses);
-
-  console.log(
-    `[${symbol} - TF ${timeframe}] emaFast=${emaFast}, emaSlow=${emaSlow}, rawLastPrice=${lastPrice}, MACD hist=${macdData.histogram}, RSI=${rsiValue}`
-  );
-  // Signal determination:
-  // BUY when EMA condition, MACD histogram > 0 and RSI < 70
-  // SELL when EMA condition, MACD histogram < 0 and RSI > 30
-  if (emaFast > emaSlow && macdData.histogram > 0 && rsiValue < 70) {
-    return { signal: "BUY", rawPrice: lastPrice };
-  } else if (emaFast < emaSlow && macdData.histogram < 0 && rsiValue > 30) {
-    return { signal: "SELL", rawPrice: lastPrice };
-  } else {
-    return null;
-  }
-};
-// Check trading signal - using EMA, MACD and RSI as filters
 const generateSignal = async (symbol, timeframe) => {
   const candles = await getHistoricalData(symbol, timeframe);
   if (candles.length < 50) return null; // Mindestanzahl an Kerzen
@@ -105,8 +74,20 @@ const generateSignal = async (symbol, timeframe) => {
   return null;
 };
 
-// Multi-Timeframe Analysis: Check signals for M1, M15 and H1
+// Multi-Timeframe-Analyse: Prüfe Signale für M1, M15 und H1
 const checkMultiTimeframeSignal = async (symbol) => {
+  // Check if there is already an open trade for this symbol
+  // const openPositionsForSymbol = await getOpenPositionsForSymbol(symbol);
+  // if (openPositionsForSymbol >= 1) {
+  //   console.log(`Trade for ${symbol} is already open. Skipping new trade.`);
+  //   return;
+  // }
+  // const openPositions = await getOpenPositionsCount();
+  // if (openPositions >= 5) {
+  //   console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
+  //   return;
+  // const signalM15 = await generateSignal(symbol, CONFIG.timeframe.M15);
+  // const signalH1 = await generateSignal(symbol, CONFIG.timeframe.H1);
   const signalM1 = await generateSignal(symbol, CONFIG.timeframe.M1);
   const signalM15 = await generateSignal(symbol, CONFIG.timeframe.M15);
   if (!signalM1 || !signalM15) {
@@ -116,7 +97,7 @@ const checkMultiTimeframeSignal = async (symbol) => {
   if (signalM1.signal === signalM15.signal) {
     return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
   }
-  return null;
+  return { signal: signalM1.signal, lastPrice: signalM1.lastPrice };
 };
 
 // Calculate lot size (only 1 trade per currency pair, max 5 total)
