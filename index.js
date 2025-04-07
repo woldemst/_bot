@@ -16,7 +16,7 @@ const getAccountBalance = async () => {
         currentBalance = data.balance;
         console.log("Balance updated:", currentBalance);
       } else {
-        console.error("Ungültige Balance-Daten:", data);
+        console.error("Invalid balance data:", data);
       }
     });
   }
@@ -83,17 +83,37 @@ const checkSignalForSymbol = async (symbol, timeframe, fastPeriod, slowPeriod) =
     return null;
   }
 };
+// Check trading signal - using EMA, MACD and RSI as filters
+const generateSignal = async (symbol, timeframe) => {
+  const candles = await getHistoricalData(symbol, timeframe);
+  if (candles.length < 50) return null; // Mindestanzahl an Kerzen
+  const closes = candles.map((c) => c.close);
+  const fastEMA = calculateEMA(closes, CONFIG.fastEMA);
+  const slowEMA = calculateEMA(closes, CONFIG.slowEMA);
+  const macd = calculateMACD(closes);
+  const lastPrice = closes[closes.length - 1];
+
+  console.log(
+    `Signal for ${symbol}: fastEMA=${fastEMA.toFixed(5)}, slowEMA=${slowEMA.toFixed(5)}, MACD Histogram=${macd.histogram.toFixed(5)}`
+  );
+
+  if (fastEMA > slowEMA && macd.histogram > 0) {
+    return { signal: 0, lastPrice };
+  } else if (fastEMA < slowEMA && macd.histogram < 0) {
+    return { signal: 1, lastPrice };
+  }
+  return null;
+};
 
 // Multi-Timeframe Analysis: Check signals for M1, M15 and H1
 const checkMultiTimeframeSignal = async (symbol) => {
-  const signalM1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M1, CONFIG.fastMA, CONFIG.slowMA);
-  const signalM15 = await checkSignalForSymbol(symbol, CONFIG.timeframe.M15, CONFIG.fastMA, CONFIG.slowMA);
-  const signalH1 = await checkSignalForSymbol(symbol, CONFIG.timeframe.H1, CONFIG.fastMA, CONFIG.slowMA);
-  if (!signalM1 || !signalM15 || !signalH1) {
+  const signalM1 = await generateSignal(symbol, CONFIG.timeframe.M1);
+  const signalM15 = await generateSignal(symbol, CONFIG.timeframe.M15);
+  if (!signalM1 || !signalM15) {
     console.error(`Not enough data for ${symbol}`);
     return null;
   }
-  if (signalM1.signal === signalM15.signal && signalM15.signal === signalH1.signal) {
+  if (signalM1.signal === signalM15.signal) {
     return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
   }
   return null;
@@ -253,24 +273,23 @@ const startBot = async () => {
       }
     });
 
-    // console.log("Waiting for balance data...");
-    // setTimeout(async () => {
-    // await getAccountBalance();
-    // setInterval(async () => {
-    //   if (isMarketOpen()) {
-    //     await checkAllPairsAndTrade();
-    //   } else {
-    //     console.log("Market is closed. No trades will be placed.");
-    //     return; // Exit the function if the market is closed to avoid placing trades during this time
-    //   }
-    // }, 60000);
+    console.log("Waiting for balance data...");
+    setTimeout(async () => {
+      await getAccountBalance();
+      setInterval(async () => {
+        if (isMarketOpen()) {
+          await checkAllPairsAndTrade();
+        } else {
+          console.log("Market is closed. No trades will be placed.");
+          return; // Exit the function if the market is closed to avoid placing trades during this time
+        }
+      }, 10000);
 
-    // console.log("Bot started...");
-    // }, 3000);
+      console.log("Bot started...");
+    }, 3000);
 
     //just for testing
-    await test();
-
+    // await test();
   } catch (error) {
     console.error("Error:", error);
     throw error;
