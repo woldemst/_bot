@@ -86,10 +86,9 @@ const checkMultiTimeframeSignal = async (symbol) => {
   // if (openPositions >= 5) {
   //   console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
   //   return;
-  // const signalM15 = await generateSignal(symbol, CONFIG.timeframe.M15);
   // const signalH1 = await generateSignal(symbol, CONFIG.timeframe.H1);
-  const signalM1 = await generateSignal(symbol, CONFIG.timeframe.M1);
   const signalM15 = await generateSignal(symbol, CONFIG.timeframe.M15);
+  const signalM1 = await generateSignal(symbol, CONFIG.timeframe.M1);
   if (!signalM1 || !signalM15) {
     console.error(`Not enough data for ${symbol}`);
     return null;
@@ -109,29 +108,36 @@ function calculatePositionSize(accountBalance, riskPerTrade, stopLossPips, symbo
 }
 
 // Order execution: Uses current market price as basis and normalizes prices correctly
+// Update the executeTradeForSymbol function to handle numeric signal values
 async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   const factor = symbol.includes("JPY") ? 1000 : 100000;
   const pipMultiplier = getPipMultiplier(symbol);
   const spreadRaw = 0.0002 * factor;
-  const rawEntry = direction === "BUY" ? rawPrice + spreadRaw : rawPrice;
+  
+  // Convert numeric direction to string if needed
+  const directionStr = typeof direction === 'number' 
+    ? (direction === 0 ? "BUY" : "SELL") 
+    : direction;
+  
+  const rawEntry = directionStr === "BUY" ? rawPrice + spreadRaw : rawPrice;
   const entry = normalizePrice(symbol, rawEntry);
   const rawSL =
-    direction === "BUY"
+    directionStr === "BUY"
       ? rawEntry - CONFIG.stopLossPips * (pipMultiplier * factor)
       : rawEntry + CONFIG.stopLossPips * (pipMultiplier * factor);
   const rawTP =
-    direction === "BUY"
+    directionStr === "BUY"
       ? rawEntry + CONFIG.takeProfitPips * (pipMultiplier * factor)
       : rawEntry - CONFIG.takeProfitPips * (pipMultiplier * factor);
   const sl = normalizePrice(symbol, rawSL);
   const tp = normalizePrice(symbol, rawTP);
 
-  console.log(`Executing ${direction} trade for ${symbol}: entry=${entry}, SL=${sl}, TP=${tp}`);
+  console.log(`Executing ${directionStr} trade for ${symbol}: entry=${entry}, SL=${sl}, TP=${tp}`);
   console.log("entry:", entry, "stop loss:", sl, "take profit:", tp);
 
   try {
     const order = await x.Socket.send.tradeTransaction({
-      cmd: direction === "BUY" ? 0 : 1,
+      cmd: directionStr === "BUY" ? 0 : 1,
       customComment: `Scalping Bot Order for ${symbol}`,
       expiration: Date.now() + 3600000,
       offset: 0,
@@ -143,21 +149,60 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
       type: 0,
       volume: lotSize,
     });
-    console.log(`${direction} order executed for ${symbol} at ${entry}, order:`, order);
+    console.log(`${directionStr} order executed for ${symbol} at ${entry}, order:`, order);
+    
+    // Add this to check if the order was actually placed
+    if (order && order.data && order.data.returnData && order.data.returnData.order) {
+      const orderId = order.data.returnData.order;
+      console.log("Order successfully placed with ID:", orderId);
+      
+      // Check trade status after placement and log more details
+      setTimeout(async () => {
+        const status = await checkTradeStatus(orderId);
+        console.log("Detailed trade status:", JSON.stringify(status, null, 2));
+        
+        // Also check if the trade appears in open positions
+        const openPositions = await getOpenPositionsCount();
+        console.log(`Current open positions: ${openPositions}`);
+      }, 2000); // Wait 2 seconds for the order to process
+      
+      return orderId;
+    } else {
+      console.error("Order submission failed - no order ID in response");
+      return null;
+    }
   } catch (error) {
-    console.error(`Failed to execute ${direction} trade for ${symbol}:`, error);
+    console.error(`Failed to execute ${directionStr} trade for ${symbol}:`, error);
+    return null;
   }
 }
 
 // Get open positions (wrapped in Promise)
 async function getOpenPositionsCount() {
-  return new Promise((resolve) => {
-    x.Stream.listen.getTrades((data) => {
-      const trades = Array.isArray(data) ? data : [data];
-      const openTrades = trades.filter((t) => t && !t.closed);
-      console.log("Open positions update:", openTrades);
-      resolve(openTrades.length);
-    });
+  return new Promise((resolve, reject) => {
+    try {
+      x.Stream.listen.getTrades((data) => {
+        if (!data) {
+          console.log("No trade data received");
+          resolve(0);
+          return;
+        }
+        
+        const trades = Array.isArray(data) ? data : [data];
+        const openTrades = trades.filter((t) => t && !t.closed);
+        console.log("Open positions update:", openTrades);
+        resolve(openTrades.length);
+      });
+      
+      // Add a timeout in case the stream doesn't respond
+      setTimeout(() => {
+        console.log("Trade stream response timeout");
+        resolve(0);
+      }, 5000);
+    } catch (err) {
+      console.error("Error in trade stream listener:", err);
+      resolve(0);
+    }
   }).catch((err) => {
     console.error("Error fetching open positions:", err);
     return 0;
@@ -201,7 +246,7 @@ async function checkAllPairsAndTrade() {
   }
 }
 
-// Backtesting
+// Backtesting. Use just on weekends. Is not so impotant
 const test = async () => {
   // const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
   // const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
@@ -210,6 +255,116 @@ const test = async () => {
     const historicalData = await getHistoricalData(CONFIG.symbols.AUDUSD, CONFIG.timeframe.M1);
     await backtestStrategy(CONFIG.symbols.AUDUSD, historicalData);
   }, 3000);
+};
+
+// Improve the checkTradeStatus function to provide more details
+const checkTradeStatus = async (orderId) => {
+  try {
+    console.log(`Checking status for order ID: ${orderId}`);
+    // Fix: Pass the orderId directly as a number, not as an object
+    const tradeStatus = await x.Socket.send.tradeTransactionStatus({
+      order: orderId // Don't wrap in another object, just pass the number
+    });
+    
+    // Log more detailed information about the trade status
+    if (tradeStatus && tradeStatus.data) {
+      const status = tradeStatus.data;
+      console.log(`Order ${orderId} status: ${status.requestStatus}`);
+      
+      if (status.requestStatus === 3) {
+        console.log("Order was rejected. Reason:", status.message);
+      } else if (status.requestStatus === 0) {
+        console.log("Order is pending");
+      } else if (status.requestStatus === 1) {
+        console.log("Order was accepted");
+      } else if (status.requestStatus === 2) {
+        console.log("Order is being processed");
+      }
+    }
+    
+    return tradeStatus;
+  } catch (err) {
+    console.error("Failed to check trade status:", err);
+    return null;
+  }
+};
+
+const placeOrder = async () => {
+  try {
+    const symbol = "EURUSD";
+    const currentRawPrice = await getCurrentPrice(symbol);
+    if (!currentRawPrice) {
+      console.error("Failed to retrieve current price.");
+      return;
+    }
+
+    // Calculate proper values with factor adjustment
+    const factor = symbol.includes("JPY") ? 1000 : 100000;
+    const pipMultiplier = getPipMultiplier(symbol);
+
+    // Convert raw price to actual price format
+    const entry = normalizePrice(symbol, currentRawPrice);
+
+    // Calculate SL/TP in actual price format (not pips)
+    const slDistance = CONFIG.stopLossPips * (pipMultiplier * factor);
+    const tpDistance = CONFIG.takeProfitPips * (pipMultiplier * factor);
+
+    const sl = normalizePrice(symbol, currentRawPrice - slDistance);
+    const tp = normalizePrice(symbol, currentRawPrice + tpDistance);
+
+    // Use fixed volume for testing
+    const volume = 0.01; // Minimum lot size for most brokers
+
+    const orderData = {
+      cmd: 0, // BUY
+      symbol: symbol,
+      price: entry,
+      sl: sl,
+      tp: tp,
+      volume: volume,
+      type: 0,
+      order: 0,
+    };
+
+    console.log("Attempting to place order with data:", orderData);
+    const result = await x.Socket.send.tradeTransaction(orderData);
+    console.log("Order response:", result);
+
+    // Fix the success check condition
+    if (result && result.data && result.data.returnData && result.data.returnData.order) {
+      const orderId = result.data.returnData.order;
+      console.log("Order successfully placed with ID:", orderId);
+
+      // Check trade status after a short delay and wait for the result
+      console.log("Waiting for order processing...");
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      try {
+        const status = await checkTradeStatus(orderId);
+        console.log("Status check completed");
+      } catch (statusErr) {
+        console.error("Error checking status:", statusErr);
+      }
+      
+      // Also check if we can see the position in open trades
+      console.log("Checking if trade appears in open positions...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      try {
+        await getOpenPositionsCount();
+      } catch (posErr) {
+        console.error("Error checking positions:", posErr);
+      }
+      
+      return orderId;
+    } else {
+      console.error("Order not accepted - no order ID in response");
+      return null;
+    }
+  } catch (err) {
+    console.error("Order failed:", err);
+    return null;
+  }
 };
 
 // Main function
@@ -259,7 +414,8 @@ const startBot = async () => {
       await getAccountBalance();
       setInterval(async () => {
         if (isMarketOpen()) {
-          await checkAllPairsAndTrade();
+          // await checkAllPairsAndTrade();
+          await placeOrder();
         } else {
           console.log("Market is closed. No trades will be placed.");
           return; // Exit the function if the market is closed to avoid placing trades during this time
