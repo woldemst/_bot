@@ -12,9 +12,9 @@
   "type": "commonjs",
   "description": "",
   "dependencies": {
+    "@oanda/v20": "^3.0.25-0",
     "axios": "^1.8.1",
     "dotenv": "^16.4.7",
-    "nodemon": "^3.1.9",
-    "xapi-node": "^3.0.5"
+    "nodemon": "^3.1.9"
   }
 }

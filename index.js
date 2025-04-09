@@ -1,8 +1,9 @@
 require("dotenv").config();
+const v20 = require('@oanda/v20');
 const { calculateEMA, calculateMACD, calculateRSI } = require("./indicators");
 const { backtestStrategy } = require("./backtesting");
 const { CONFIG } = require("./config");
-const { x, connectXAPI } = require("./xapi");
+const { x, connectXAPI } = require("./oanda");
 
 let currentBalance = null;
 
