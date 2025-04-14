@@ -1,9 +1,9 @@
 require("dotenv").config();
-const v20 = require('@oanda/v20');
+// const v20 = require('@oanda/v20');
 const { calculateEMA, calculateMACD, calculateRSI } = require("./indicators");
-const { backtestStrategy } = require("./backtesting");
+// const { backtestStrategy } = require("./backtesting");
 const { CONFIG } = require("./config");
-const { x, connectXAPI } = require("./oanda");
+const { igClient, connectIG, formatInstrument, convertTimeframe, Direction, OrderType, TimeInForce } = require("./connect");
 
 let currentBalance = null;
 
@@ -12,40 +12,89 @@ const getAccountBalance = async () => {
     console.log("Using cached balance:", currentBalance);
     return currentBalance;
   } else {
-    x.Stream.listen.getBalance((data) => {
-      if (data && data.balance !== undefined) {
-        currentBalance = data.balance;
+    try {
+      const accountInfo = await igClient.getAccountInfo();
+      if (accountInfo && accountInfo.balance) {
+        currentBalance = parseFloat(accountInfo.balance);
         console.log("Balance updated:", currentBalance);
+        return currentBalance;
       } else {
-        console.error("Invalid balance data:", data);
+        console.error("Invalid balance data:", accountInfo);
+        return null;
       }
-    });
+    } catch (err) {
+      console.error("Error fetching balance:", err);
+      return null;
+    }
   }
 };
 
 // get historical data (Candles)
 const getHistoricalData = async (symbol, timeframe) => {
   try {
-    const result = await x.getPriceHistory({ symbol, period: timeframe });
-    return result && result.candles ? result.candles : [];
+    // Convert timeframe from minutes to IG format
+    const resolution = convertTimeframe(timeframe);
+
+    // Format instrument for IG
+    const epic = formatInstrument(symbol);
+
+    // Get current time
+    const now = new Date();
+
+    // Calculate start time (100 candles back)
+    const startDate = new Date(now);
+    startDate.setMinutes(startDate.getMinutes() - timeframe * 100);
+
+    const response = await igClient.getPriceHistory(epic, {
+      resolution: resolution,
+      from: startDate.toISOString(),
+      to: now.toISOString(),
+    });
+
+    if (response && response.prices) {
+      // Transform IG candle format to match your existing format
+      return response.prices.map((candle) => ({
+        close: parseFloat(candle.closePrice.bid),
+        open: parseFloat(candle.openPrice.bid),
+        high: parseFloat(candle.highPrice.bid),
+        low: parseFloat(candle.lowPrice.bid),
+        ctm: new Date(candle.snapshotTime).getTime(),
+        timestamp: new Date(candle.snapshotTime).getTime(),
+      }));
+    }
+    return [];
   } catch (err) {
     console.error("Error in getHistoricalData:", err);
     return [];
   }
 };
 
-// actual price of last candle (M1)
+// Get current price
 const getCurrentPrice = async (symbol) => {
-  const candles = await getHistoricalData(symbol, CONFIG.timeframe.M1);
-  if (candles.length === 0) return null;
-  const closes = candles.map((c) => c.close);
-  return closes[closes.length - 1];
+  try {
+    const epic = formatInstrument(symbol);
+    const response = await igClient.getMarketDetails(epic);
+
+    if (response && response.snapshot) {
+      // Use mid price (average of bid and offer)
+      return (parseFloat(response.snapshot.bid) + parseFloat(response.snapshot.offer)) / 2;
+    }
+    return null;
+  } catch (err) {
+    console.error("Error getting current price:", err);
+    return null;
+  }
 };
 
-// Converts raw prices into actual exchange rates
+// Helper function to format instrument for Oanda
+const formatInstrument = (symbol) => {
+  // Convert "EURUSD" to "EUR_USD"
+  return symbol.slice(0, 3) + "_" + symbol.slice(3);
+};
+
+// IG already provides normalized prices
 function normalizePrice(symbol, rawPrice) {
-  const factor = symbol.includes("JPY") ? 1000 : 100000;
-  return parseFloat((rawPrice / factor).toFixed(5));
+  return rawPrice;
 }
 
 // Returns the pip multiplier
@@ -56,7 +105,7 @@ function getPipMultiplier(symbol) {
 // Check trading signal - using EMA, MACD and RSI as filters
 const generateSignal = async (symbol, timeframe) => {
   const candles = await getHistoricalData(symbol, timeframe);
-  if (candles.length < 50) return null; // Mindestanzahl an Kerzen
+  if (candles.length < 50) return null; // Minimum number of candles
   const closes = candles.map((c) => c.close);
   const fastEMA = calculateEMA(closes, CONFIG.fastEMA);
   const slowEMA = calculateEMA(closes, CONFIG.slowEMA);
@@ -75,19 +124,8 @@ const generateSignal = async (symbol, timeframe) => {
   return null;
 };
 
-// Multi-Timeframe-Analyse: Prüfe Signale für M1, M15 und H1
+// Multi-Timeframe Analysis
 const checkMultiTimeframeSignal = async (symbol) => {
-  // Check if there is already an open trade for this symbol
-  // const openPositionsForSymbol = await getOpenPositionsForSymbol(symbol);
-  // if (openPositionsForSymbol >= 1) {
-  //   console.log(`Trade for ${symbol} is already open. Skipping new trade.`);
-  //   return;
-  // }
-  // const openPositions = await getOpenPositionsCount();
-  // if (openPositions >= 5) {
-  //   console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
-  //   return;
-  // const signalH1 = await generateSignal(symbol, CONFIG.timeframe.H1);
   const signalM15 = await generateSignal(symbol, CONFIG.timeframe.M15);
   const signalM1 = await generateSignal(symbol, CONFIG.timeframe.M1);
   if (!signalM1 || !signalM15) {
@@ -95,81 +133,70 @@ const checkMultiTimeframeSignal = async (symbol) => {
     return null;
   }
   if (signalM1.signal === signalM15.signal) {
-    return { signal: signalM1.signal, rawPrice: signalM1.rawPrice };
+    return { signal: signalM1.signal, lastPrice: signalM1.lastPrice };
   }
   return { signal: signalM1.signal, lastPrice: signalM1.lastPrice };
 };
 
-// Calculate lot size (only 1 trade per currency pair, max 5 total)
+// Calculate lot size
 function calculatePositionSize(accountBalance, riskPerTrade, stopLossPips, symbol) {
   const pipMultiplier = getPipMultiplier(symbol);
-  const factor = symbol.includes("JPY") ? 1000 : 100000;
   const riskAmount = accountBalance * riskPerTrade;
-  return riskAmount / (stopLossPips * (pipMultiplier * factor));
+  return Math.floor(riskAmount / (stopLossPips * pipMultiplier));
 }
 
-// Order execution: Uses current market price as basis and normalizes prices correctly
-// Update the executeTradeForSymbol function to handle numeric signal values
-async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
-  const factor = symbol.includes("JPY") ? 1000 : 100000;
-  const pipMultiplier = getPipMultiplier(symbol);
-  const spreadRaw = 0.0002 * factor;
-  
-  // Convert numeric direction to string if needed
-  const directionStr = typeof direction === 'number' 
-    ? (direction === 0 ? "BUY" : "SELL") 
-    : direction;
-  
-  const rawEntry = directionStr === "BUY" ? rawPrice + spreadRaw : rawPrice;
-  const entry = normalizePrice(symbol, rawEntry);
-  const rawSL =
-    directionStr === "BUY"
-      ? rawEntry - CONFIG.stopLossPips * (pipMultiplier * factor)
-      : rawEntry + CONFIG.stopLossPips * (pipMultiplier * factor);
-  const rawTP =
-    directionStr === "BUY"
-      ? rawEntry + CONFIG.takeProfitPips * (pipMultiplier * factor)
-      : rawEntry - CONFIG.takeProfitPips * (pipMultiplier * factor);
-  const sl = normalizePrice(symbol, rawSL);
-  const tp = normalizePrice(symbol, rawTP);
+// Order execution for IG
+async function executeTradeForSymbol(symbol, direction, price, lotSize) {
+  const epic = formatInstrument(symbol);
+  const directionStr = typeof direction === "number" ? (direction === 0 ? "BUY" : "SELL") : direction;
 
-  console.log(`Executing ${directionStr} trade for ${symbol}: entry=${entry}, SL=${sl}, TP=${tp}`);
-  console.log("entry:", entry, "stop loss:", sl, "take profit:", tp);
+  // Calculate stop loss and take profit levels
+  const pipMultiplier = getPipMultiplier(symbol);
+  const slDistance = CONFIG.stopLossPips * pipMultiplier;
+  const tpDistance = CONFIG.takeProfitPips * pipMultiplier;
+
+  const sl = directionStr === "BUY" ? price - slDistance : price + slDistance;
+  const tp = directionStr === "BUY" ? price + tpDistance : price - slDistance;
+
+  console.log(`Executing ${directionStr} trade for ${symbol}: entry=${price}, SL=${sl.toFixed(5)}, TP=${tp.toFixed(5)}`);
 
   try {
-    const order = await x.Socket.send.tradeTransaction({
-      cmd: directionStr === "BUY" ? 0 : 1,
-      customComment: `Scalping Bot Order for ${symbol}`,
-      expiration: Date.now() + 3600000,
-      offset: 0,
-      order: 0,
-      price: entry,
-      sl: sl,
-      tp: tp,
-      symbol: symbol,
-      type: 0,
-      volume: lotSize,
-    });
-    console.log(`${directionStr} order executed for ${symbol} at ${entry}, order:`, order);
-    
-    // Add this to check if the order was actually placed
-    if (order && order.data && order.data.returnData && order.data.returnData.order) {
-      const orderId = order.data.returnData.order;
-      console.log("Order successfully placed with ID:", orderId);
-      
-      // Check trade status after placement and log more details
+    // Create order request
+    const dealReference = `BOT_${symbol}_${Date.now()}`;
+
+    const orderRequest = {
+      epic: epic,
+      expiry: "-",
+      direction: directionStr === "BUY" ? Direction.BUY : Direction.SELL,
+      size: lotSize.toString(),
+      orderType: OrderType.MARKET,
+      timeInForce: TimeInForce.FILL_OR_KILL,
+      guaranteedStop: false,
+      stopLevel: sl.toFixed(5),
+      stopDistance: null,
+      limitLevel: tp.toFixed(5),
+      limitDistance: null,
+      dealReference: dealReference,
+    };
+
+    const response = await igClient.deal(orderRequest);
+
+    if (response && response.dealReference) {
+      console.log(`${directionStr} order executed for ${symbol} at ${price}, deal reference: ${response.dealReference}`);
+
+      // Check trade status after placement
       setTimeout(async () => {
-        const status = await checkTradeStatus(orderId);
+        const status = await checkTradeStatus(response.dealReference);
         console.log("Detailed trade status:", JSON.stringify(status, null, 2));
-        
-        // Also check if the trade appears in open positions
+
+        // Also check open positions
         const openPositions = await getOpenPositionsCount();
         console.log(`Current open positions: ${openPositions}`);
-      }, 2000); // Wait 2 seconds for the order to process
-      
-      return orderId;
+      }, 2000);
+
+      return response.dealReference;
     } else {
-      console.error("Order submission failed - no order ID in response");
+      console.error("Order submission failed:", response);
       return null;
     }
   } catch (error) {
@@ -178,56 +205,51 @@ async function executeTradeForSymbol(symbol, direction, rawPrice, lotSize) {
   }
 }
 
-// Get open positions (wrapped in Promise)
+// Get open positions count
 async function getOpenPositionsCount() {
-  return new Promise((resolve, reject) => {
-    try {
-      x.Stream.listen.getTrades((data) => {
-        if (!data) {
-          console.log("No trade data received");
-          resolve(0);
-          return;
-        }
-        
-        const trades = Array.isArray(data) ? data : [data];
-        const openTrades = trades.filter((t) => t && !t.closed);
-        console.log("Open positions update:", openTrades);
-        resolve(openTrades.length);
-      });
-      
-      // Add a timeout in case the stream doesn't respond
-      setTimeout(() => {
-        console.log("Trade stream response timeout");
-        resolve(0);
-      }, 5000);
-    } catch (err) {
-      console.error("Error in trade stream listener:", err);
-      resolve(0);
+  try {
+    const positions = await igClient.getPositions();
+    if (positions && positions.positions) {
+      console.log("Open positions update:", positions.positions.length);
+      return positions.positions.length;
     }
-  }).catch((err) => {
+    return 0;
+  } catch (err) {
     console.error("Error fetching open positions:", err);
     return 0;
-  });
+  }
 }
 
-// Check each symbol and potentially trigger a trade (max. 1 trade per symbol)
+// Check trade status
+const checkTradeStatus = async (dealReference) => {
+  try {
+    console.log(`Checking status for deal reference: ${dealReference}`);
+    const response = await igClient.getDealConfirmation(dealReference);
+    return response;
+  } catch (err) {
+    console.error("Failed to check trade status:", err);
+    return null;
+  }
+};
+
+// Check each symbol and potentially trigger a trade
 async function checkAndTradeForSymbol(symbol) {
   const signalData = await checkMultiTimeframeSignal(symbol);
   if (!signalData) {
     console.log(`No consistent multi-timeframe signal for ${symbol}`);
     return;
   }
-  console.log(`Signal for ${symbol}: ${signalData.signal} at raw price ${signalData.rawPrice}`);
+  console.log(`Signal for ${symbol}: ${signalData.signal} at price ${signalData.lastPrice}`);
 
-  // Check if a trade is already open for this symbol
+  // Check if max positions reached
   const openPositions = await getOpenPositionsCount();
   if (openPositions >= 5) {
     console.log(`Max open positions reached (${openPositions}). No new trade for ${symbol}.`);
     return;
   }
 
-  const currentRawPrice = await getCurrentPrice(symbol);
-  console.log(`Current market price for ${symbol}: ${currentRawPrice}`);
+  const currentPrice = await getCurrentPrice(symbol);
+  console.log(`Current market price for ${symbol}: ${currentPrice}`);
 
   const balance = await getAccountBalance();
   if (!balance) {
@@ -237,7 +259,7 @@ async function checkAndTradeForSymbol(symbol) {
 
   const positionSize = calculatePositionSize(balance, CONFIG.riskPerTrade, CONFIG.stopLossPips, symbol);
   console.log(`Placing ${signalData.signal} trade for ${symbol} with lot size: ${positionSize}`);
-  await executeTradeForSymbol(symbol, signalData.signal, currentRawPrice, positionSize);
+  await executeTradeForSymbol(symbol, signalData.signal, currentPrice, positionSize);
 }
 
 // Iterate over all defined symbols and check individually
@@ -252,114 +274,72 @@ const test = async () => {
   // const startTimestamp = Math.floor(new Date("2025-01-14T00:00:00Z").getTime() / 1000);
   // const endTimestamp = Math.floor(new Date("2025-02-14T00:00:00Z").getTime() / 1000);
   console.log("Waiting for testing data...");
-  setTimeout(async () => {
-    const historicalData = await getHistoricalData(CONFIG.symbols.AUDUSD, CONFIG.timeframe.M1);
-    await backtestStrategy(CONFIG.symbols.AUDUSD, historicalData);
-  }, 3000);
+  // setTimeout(async () => {
+  //   const historicalData = await getHistoricalData(CONFIG.symbols.AUDUSD, CONFIG.timeframe.M1);
+  //   await backtestStrategy(CONFIG.symbols.AUDUSD, historicalData);
+  // }, 3000);
 };
 
-// Improve the checkTradeStatus function to provide more details
-const checkTradeStatus = async (orderId) => {
-  try {
-    console.log(`Checking status for order ID: ${orderId}`);
-    // Fix: Pass the orderId directly as a number, not as an object
-    const tradeStatus = await x.Socket.send.tradeTransactionStatus({
-      order: orderId // Don't wrap in another object, just pass the number
-    });
-    
-    // Log more detailed information about the trade status
-    if (tradeStatus && tradeStatus.data) {
-      const status = tradeStatus.data;
-      console.log(`Order ${orderId} status: ${status.requestStatus}`);
-      
-      if (status.requestStatus === 3) {
-        console.log("Order was rejected. Reason:", status.message);
-      } else if (status.requestStatus === 0) {
-        console.log("Order is pending");
-      } else if (status.requestStatus === 1) {
-        console.log("Order was accepted");
-      } else if (status.requestStatus === 2) {
-        console.log("Order is being processed");
-      }
-    }
-    
-    return tradeStatus;
-  } catch (err) {
-    console.error("Failed to check trade status:", err);
-    return null;
-  }
-};
-
+// Place a test order
 const placeOrder = async () => {
   try {
     const symbol = "EURUSD";
-    const currentRawPrice = await getCurrentPrice(symbol);
-    if (!currentRawPrice) {
+    const currentPrice = await getCurrentPrice(symbol);
+    if (!currentPrice) {
       console.error("Failed to retrieve current price.");
       return;
     }
 
-    // Calculate proper values with factor adjustment
-    const factor = symbol.includes("JPY") ? 1000 : 100000;
+    // Calculate SL/TP
     const pipMultiplier = getPipMultiplier(symbol);
+    const slDistance = CONFIG.stopLossPips * pipMultiplier;
+    const tpDistance = CONFIG.takeProfitPips * pipMultiplier;
 
-    // Convert raw price to actual price format
-    const entry = normalizePrice(symbol, currentRawPrice);
-
-    // Calculate SL/TP in actual price format (not pips)
-    const slDistance = CONFIG.stopLossPips * (pipMultiplier * factor);
-    const tpDistance = CONFIG.takeProfitPips * (pipMultiplier * factor);
-
-    const sl = normalizePrice(symbol, currentRawPrice - slDistance);
-    const tp = normalizePrice(symbol, currentRawPrice + tpDistance);
+    const sl = currentPrice - slDistance;
+    const tp = currentPrice + tpDistance;
 
     // Use fixed volume for testing
-    const volume = 0.01; // Minimum lot size for most brokers
+    const volume = 1; // 1 unit for IG
 
-    const orderData = {
-      cmd: 0, // BUY
-      symbol: symbol,
-      price: entry,
-      sl: sl,
-      tp: tp,
-      volume: volume,
-      type: 0,
-      order: 0,
+    const epic = formatInstrument(symbol);
+    const dealReference = `TEST_${symbol}_${Date.now()}`;
+
+    const orderRequest = {
+      epic: epic,
+      expiry: "-",
+      direction: Direction.BUY,
+      size: volume.toString(),
+      orderType: OrderType.MARKET,
+      timeInForce: TimeInForce.FILL_OR_KILL,
+      guaranteedStop: false,
+      stopLevel: sl.toFixed(5),
+      stopDistance: null,
+      limitLevel: tp.toFixed(5),
+      limitDistance: null,
+      dealReference: dealReference,
     };
 
-    console.log("Attempting to place order with data:", orderData);
-    const result = await x.Socket.send.tradeTransaction(orderData);
-    console.log("Order response:", result);
+    console.log("Attempting to place order with data:", orderRequest);
+    const response = await igClient.deal(orderRequest);
+    console.log("Order response:", response);
 
-    // Fix the success check condition
-    if (result && result.data && result.data.returnData && result.data.returnData.order) {
-      const orderId = result.data.returnData.order;
-      console.log("Order successfully placed with ID:", orderId);
+    if (response && response.dealReference) {
+      console.log("Order successfully placed with deal reference:", response.dealReference);
 
-      // Check trade status after a short delay and wait for the result
+      // Check trade status after a short delay
       console.log("Waiting for order processing...");
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
       try {
-        const status = await checkTradeStatus(orderId);
+        const status = await checkTradeStatus(response.dealReference);
         console.log("Status check completed");
       } catch (statusErr) {
         console.error("Error checking status:", statusErr);
       }
-      
-      // Also check if we can see the position in open trades
-      console.log("Checking if trade appears in open positions...");
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      try {
-        await getOpenPositionsCount();
-      } catch (posErr) {
-        console.error("Error checking positions:", posErr);
-      }
-      
-      return orderId;
+
+      return response.dealReference;
     } else {
-      console.error("Order not accepted - no order ID in response");
+      console.error("Order not accepted:", response);
       return null;
     }
   } catch (err) {
@@ -368,78 +348,13 @@ const placeOrder = async () => {
   }
 };
 
-// Main function
-const startBot = async () => {
-  try {
-    await connectXAPI();
-
-    // Stream subscription
-    try {
-      await x.Stream.subscribe.getBalance();
-      console.log("Balance stream subscribed");
-    } catch (err) {
-      console.error("Error subscribing to balance stream:", err);
-    }
-    try {
-      await x.Stream.subscribe.getTickPrices("EURUSD");
-    } catch (err) {
-      console.error("subscribe for EURUSD failed:", err);
-    }
-
-    try {
-      await x.Stream.subscribe.getTrades();
-      console.log("Trades stream subscribed");
-    } catch (err) {
-      console.error("Error subscribing to trades stream:", err);
-    }
-    // Listener registration
-    x.Stream.listen.getBalance((data) => {
-      if (data && data.balance !== undefined) {
-        currentBalance = data.balance;
-        // console.log("Balance updated:", currentBalance);
-      } else {
-        console.error("Cannot update the balance", data);
-      }
-    });
-
-    x.Stream.listen.getTrades((data) => {
-      if (data) {
-        console.log("trades:", data);
-      } else {
-        console.error("no trades data:", data);
-      }
-    });
-
-    console.log("Waiting for balance data...");
-    setTimeout(async () => {
-      await getAccountBalance();
-      setInterval(async () => {
-        if (isMarketOpen()) {
-          // await checkAllPairsAndTrade();
-          await placeOrder();
-        } else {
-          console.log("Market is closed. No trades will be placed.");
-          return; // Exit the function if the market is closed to avoid placing trades during this time
-        }
-      }, 10000);
-
-      console.log("Bot started...");
-    }, 3000);
-
-    //just for testing
-    // await test();
-  } catch (error) {
-    console.error("Error:", error);
-    throw error;
-  }
-};
-
+// Check if market is open
 const isMarketOpen = () => {
   const now = new Date();
   const day = now.getUTCDay();
   const hour = now.getUTCHours();
 
-  // Forex Marktzeiten (UTC):
+  // Forex market hours (UTC):
   // Sydney: 22:00-06:00
   // Tokyo: 00:00-09:00
   // London: 08:00-17:00
@@ -453,6 +368,31 @@ const isMarketOpen = () => {
       (hour >= 8 && hour < 17) || // London
       (hour >= 13 && hour < 22)) // New York
   );
+};
+
+// Main function
+const startBot = async () => {
+  try {
+    await connectIG();
+
+    console.log("Waiting for balance data...");
+    setTimeout(async () => {
+      await getAccountBalance();
+      setInterval(async () => {
+        if (isMarketOpen()) {
+          // await checkAllPairsAndTrade();
+          await placeOrder();
+        } else {
+          console.log("Market is closed. No trades will be placed.");
+        }
+      }, 10000);
+
+      console.log("Bot started...");
+    }, 3000);
+  } catch (error) {
+    console.error("Error:", error);
+    throw error;
+  }
 };
 
 startBot();
