@@ -1,81 +1,99 @@
-// ig.js
+// connect.js
 require("dotenv").config();
-const { IGApi, APIClient, Deal, Direction, OrderType, TimeInForce } = require("ig-trading-api");
+const axios = require('axios');
+
+// FXCM API configuration
+const API_TOKEN = process.env.FXCM_API_TOKEN;
+const BASE_URL = 'https://api-demo.fxcm.com:443';
+const headers = {
+  'Authorization': `Bearer ${API_TOKEN}`,
+  'Content-Type': 'application/json'
+};
 
 // Check for required environment variables
-if (!process.env.IG_API_KEY || !process.env.IG_USERNAME || !process.env.IG_PASSWORD) {
+if (!process.env.FXCM_API_TOKEN || !process.env.FXCM_ACCOUNT_ID) {
   throw new Error("Missing required environment variables. Please check your .env file");
 }
 
-// Create API client
-const igClient = new IGApi({
-  apiKey: process.env.IG_API_KEY,
-  isDemo: process.env.IG_IS_DEMO === "true", // Set to true for demo account
-  username: process.env.IG_USERNAME,
-  password: process.env.IG_PASSWORD,
-});
-
-// Connect and verify connection
-const connectIG = async () => {
+// Connect and verify connection to FXCM
+const connectAPI = async () => {
   try {
-    // Login to the IG API
-    await igClient.login();
-    console.log("IG connection established");
-
-    // Get account info to verify connection
-    const accountInfo = await igClient.getAccountInfo();
-    console.log("Account connected:", accountInfo.accountId);
-
-    return true;
+    // Test connection by getting trading session status
+    const response = await axios.get(`${BASE_URL}/trading/get_model?models=TradingSessionStatus`, { headers });
+    
+    if (response.data && response.data.response) {
+      console.log("FXCM connection established");
+      return true;
+    }
+    
+    throw new Error("Failed to establish connection with FXCM");
   } catch (error) {
-    console.error("Error connecting to IG API:", error.message);
+    console.error("Error connecting to FXCM API:", error.message);
     throw error;
   }
 };
 
-// Helper function to format instrument for IG
-// IG uses different format than Oanda or XTB
+// Helper function to format instrument for FXCM
 const formatInstrument = (symbol) => {
-  // For IG, we need to check their specific instrument codes
-  // This is a basic mapping, you might need to adjust based on IG's actual instrument codes
+  // FXCM uses standard forex pair notation
   const mapping = {
-    EURUSD: "CS.D.EURUSD.MINI.IP",
-    GBPUSD: "CS.D.GBPUSD.MINI.IP",
-    AUDUSD: "CS.D.AUDUSD.MINI.IP",
-    EURGBP: "CS.D.EURGBP.MINI.IP",
+    EURUSD: "EUR/USD",
+    GBPUSD: "GBP/USD",
+    AUDUSD: "AUD/USD",
+    EURGBP: "EUR/GBP",
+    USDJPY: "USD/JPY",
+    USDCAD: "USD/CAD",
+    NZDUSD: "NZD/USD",
+    USDCHF: "USD/CHF"
   };
 
   return mapping[symbol] || symbol;
 };
 
-// Helper function to convert timeframe to IG format
+// Helper function to convert timeframe to FXCM format
 const convertTimeframe = (minutes) => {
-  switch (minutes) {
-    case 1:
-      return "MINUTE";
-    case 5:
-      return "MINUTE_5";
-    case 15:
-      return "MINUTE_15";
-    case 30:
-      return "MINUTE_30";
-    case 60:
-      return "HOUR";
-    case 240:
-      return "HOUR_4";
-    case 1440:
-      return "DAY";
-    default:
-      return "MINUTE";
-  }
+  // FXCM timeframe format mapping
+  const timeframeMap = {
+    1: "m1",
+    5: "m5",
+    15: "m15",
+    30: "m30",
+    60: "H1",
+    240: "H4",
+    1440: "D1",
+    10080: "W1",
+    43200: "M1"
+  };
+
+  return timeframeMap[minutes] || "m1";
+};
+
+// FXCM order types and directions
+const Direction = {
+  BUY: 1,
+  SELL: -1
+};
+
+const OrderType = {
+  MARKET: "AtMarket",
+  LIMIT: "Entry",
+  STOP: "Entry"
+};
+
+const TimeInForce = {
+  GTC: "GTC",
+  IOC: "IOC",
+  FOK: "FOK",
+  DAY: "DAY"
 };
 
 module.exports = {
-  igClient,
-  connectIG,
+  connectAPI,
   formatInstrument,
   convertTimeframe,
-  Direction, // Export IG's Direction enum for use in orders
-  OrderType, // Export IG's OrderType enum
-  TimeInForce, // Export IG's TimeInForce enum
+  Direction,
+  OrderType,
+  TimeInForce,
+  headers,
+  BASE_URL
 };
