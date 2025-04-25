@@ -1,5 +1,5 @@
 // backtesting.js
-const { x, connectXAPI } = require("./oanda");
+
 const { calculateEMA, calculateMACD, calculateRSI, calculateATR, calculateBollingerBands } = require("./indicators");
 const { CONFIG } = require("./config");
 
