@@ -1,10 +1,13 @@
-// connect.js
 import dotenv from "dotenv";
-// TODO: Install the package first using: npm install @gehtsoft/forex-connect-lite-node
-// If types are needed, also install: npm install --save-dev @types/gehtsoft__forex-connect-lite-node
-import * as FXConnectLite from "@gehtsoft/forex-connect-lite-node";
+import { XMLHttpRequest } from 'xmlhttprequest';
+import * as FXConnectLite from "@gehtsoft/forex-connect-lite";
 
-// dotenv.config();
+// Initialize dotenv first
+dotenv.config();
+
+// Set XMLHttpRequest globally BEFORE importing FXConnectLite
+(global as any).XMLHttpRequest = XMLHttpRequest;
+(global as any).XMLHttpRequestLocal = XMLHttpRequest;
 
 // FXCM connection configuration
 const config = {
@@ -17,13 +20,28 @@ const config = {
 // Connect and verify connection to FXCM
 export const connectAPI = async () => {
   try {
-    console.log(FXConnectLite);
-
-    // const session = await FXConnectLite.createSession(config);
+    const session = await FXConnectLite.default.createSession(config);
     console.log("FXCM connection established");
-    // return session;
+    
+    // Subscribe to price updates
+    const priceSubscription = await session.subscribe("EUR/USD");
+    
+    // Set up price update handler
+    priceSubscription.onUpdate((update: { instrument: string; bid: number; ask: number; timestamp: Date }) => {
+      console.log("Price Update:", {
+        symbol: update.instrument,
+        bid: update.bid,
+        ask: update.ask,
+        timestamp: update.timestamp
+      });
+    });
+
+    return session;
   } catch (error: any) {
     console.error("Error connecting to FXCM API:", error.message);
     throw error;
   }
 };
+
+// Execute the connection immediately
+connectAPI().catch(console.error);

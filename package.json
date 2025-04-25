@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon --exec ts-node connect.ts"
+    "start": "NODE_OPTIONS='--loader ts-node/esm' ts-node tradingBot.ts"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.1",
+    "@types/xmlhttprequest": "^1.8.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }
