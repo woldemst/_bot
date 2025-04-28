@@ -2,10 +2,10 @@
   "name": "trade-bot",
   "version": "1.0.0",
   "main": "index.js",
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "NODE_OPTIONS='--loader ts-node/esm' ts-node tradingBot.ts"
+    "start": "nodemon connect.js"
   },
   "keywords": [],
   "author": "",
