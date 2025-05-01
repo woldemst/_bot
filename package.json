@@ -14,7 +14,7 @@
   "dependencies": {
     "@gehtsoft/forex-connect-lite": "^1.2.43",
     "@gehtsoft/forex-connect-lite-node": "^1.2.43",
-    "axios": "^1.8.4",
+    "axios": "^1.9.0",
     "dotenv": "^16.4.7",
     "nodemon": "^3.1.9",
     "xmlhttprequest": "^1.8.0"
