@@ -2,7 +2,7 @@
   "name": "trade-bot",
   "version": "1.0.0",
   "main": "index.js",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon connect.js"
@@ -17,6 +17,8 @@
     "axios": "^1.9.0",
     "dotenv": "^16.4.7",
     "nodemon": "^3.1.9",
+    "openapi-sampler": "^1.6.1",
+    "winston": "^3.17.0",
     "xmlhttprequest": "^1.8.0"
   },
   "devDependencies": {
