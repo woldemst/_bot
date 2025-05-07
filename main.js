@@ -1,14 +1,11 @@
 // bot-ig.js
+require('dotenv').config();
 const axios = require('axios');
 const moment = require('moment-timezone');
 const ort = require('onnxruntime-node');
 const { EMA, RSI, BollingerBands, MACD, Stochastic } = require('technicalindicators');
 
 // ————— Configuration —————
-const API_KEY    = 'YOUR_API_KEY';
-const USERNAME   = 'YOUR_USERNAME';
-const PASSWORD   = 'YOUR_PASSWORD';
-const ACCOUNT_ID = 'YOUR_ACCOUNT_ID';
 const BASE_URL   = 'https://demo-api.ig.com/gateway/deal'; // Demo-Endpoint
 
 const INSTRUMENTS = [
@@ -28,7 +25,7 @@ const TIMEZONE     = 'Europe/Berlin';
 const api = axios.create({
   baseURL: BASE_URL,
   headers: {
-    'X-IG-API-KEY': API_KEY,
+    'X-IG-API-KEY': process.env.API_KEY,
     'Content-Type': 'application/json',
     'Accept': 'application/json; charset=UTF-8',
     'Version': '2'
@@ -39,8 +36,8 @@ const api = axios.create({
 // Authentication via POST /session v1/v2 → CST + X-SECURITY-TOKEN in header :contentReference[oaicite:0]{index=0}
 async function login() {
   const resp = await api.post('/session', {
-    identifier: USERNAME,
-    password: PASSWORD,
+    identifier: process.env.USERNAME,
+    password: process.env.PASSWORD,
     encryptedPassword: false
   });
   const cst   = resp.headers['cst'];
@@ -52,7 +49,7 @@ async function login() {
 
 // ————— 2. Get Account Balance —————
 async function getBalance() {
-  const resp = await api.get(`/accounts/${ACCOUNT_ID}/balance`);
+  const resp = await api.get(`/accounts/${process.env.ACCOUNT_ID}/balance`);
   return parseFloat(resp.data.balance.balanceAvailable);
 }
 
