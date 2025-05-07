@@ -174,10 +174,14 @@ async function mainLoop() {
 }
 
 // ————— 9. Start Bot —————
+const igClient = require('./api/igClient');
+const AIModel = require('./models/aiModel');
+const trader = require('./trading/trader');
+
 (async () => {
-  await login();
-  await loadModel();
-  console.log('🚀 Starting main loop...');
-  mainLoop();
-  setInterval(mainLoop, 60*1000);
+    await igClient.login();
+    await AIModel.load();
+    console.log('🚀 Starting main loop...');
+    trader.mainLoop();
+    setInterval(() => trader.mainLoop(), 60*1000);
 })();
