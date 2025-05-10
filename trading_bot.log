@@ -1,0 +1,39 @@
+2025-05-11 01:09:32,034 - INFO - sent startApi
+2025-05-11 01:09:32,035 - INFO - REQUEST startApi {}
+2025-05-11 01:09:32,035 - INFO - SENDING startApi b'\x00\x00\x00\x0871\x002\x000\x00\x00'
+2025-05-11 01:09:32,035 - INFO - ANSWER connectAck {}
+2025-05-11 01:09:32,045 - INFO - ANSWER managedAccounts {'accountsList': 'DUM049051'}
+2025-05-11 01:09:32,045 - INFO - Connection ready, next valid order ID: 1
+2025-05-11 01:09:32,045 - INFO - Starting trading strategy
+2025-05-11 01:09:32,045 - INFO - Requesting account summary
+2025-05-11 01:09:32,046 - ERROR - Error in strategy execution: name 'Contract' is not defined
+2025-05-11 01:09:32,046 - INFO - REQUEST reqAccountSummary {'reqId': 0, 'groupName': 'All', 'tags': 'AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage'}
+2025-05-11 01:09:32,046 - INFO - SENDING reqAccountSummary b'\x00\x00\x01\xe662\x001\x000\x00All\x00AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage\x00'
+2025-05-11 01:09:33,050 - INFO - disconnecting
+2025-05-11 01:09:33,050 - INFO - ANSWER connectionClosed {}
+2025-05-11 01:09:33,050 - INFO - Bot shutdown complete
+2025-05-11 01:13:36,397 - INFO - Connecting to 127.0.0.1:4002
+2025-05-11 01:13:36,413 - INFO - sent startApi
+2025-05-11 01:13:36,413 - INFO - REQUEST startApi {}
+2025-05-11 01:13:36,413 - INFO - SENDING startApi b'\x00\x00\x00\x0871\x002\x000\x00\x00'
+2025-05-11 01:13:36,413 - INFO - ANSWER connectAck {}
+2025-05-11 01:13:36,420 - INFO - ANSWER managedAccounts {'accountsList': 'DUM049051'}
+2025-05-11 01:13:36,420 - INFO - Connection ready, next valid order ID: 1
+2025-05-11 01:13:36,420 - INFO - Requesting account summary
+2025-05-11 01:13:36,420 - INFO - Starting trading strategy
+2025-05-11 01:13:36,420 - INFO - REQUEST reqAccountSummary {'reqId': 0, 'groupName': 'All', 'tags': 'AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage'}
+2025-05-11 01:13:36,420 - INFO - REQUEST reqHistoricalData {'reqId': 0, 'contract': 4440730528: 0,EUR,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 01:13:36,420 - INFO - SENDING reqAccountSummary b'\x00\x00\x01\xe662\x001\x000\x00All\x00AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage\x00'
+2025-05-11 01:13:36,421 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x000\x000\x00EUR\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 01:13:36,421 - INFO - REQUEST reqHistoricalData {'reqId': 1, 'contract': 4441856976: 0,GBP,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 01:13:36,421 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x001\x000\x00GBP\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 01:13:36,421 - INFO - REQUEST reqHistoricalData {'reqId': 2, 'contract': 4441857296: 0,USD,CASH,,0.0,,,IDEALPRO,,JPY,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 01:13:36,421 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x002\x000\x00USD\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00JPY\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 01:13:36,421 - INFO - REQUEST reqHistoricalData {'reqId': 3, 'contract': 4442051104: 0,AUD,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 01:13:36,421 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x003\x000\x00AUD\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 01:13:36,421 - INFO - REQUEST reqHistoricalData {'reqId': 4, 'contract': 4442051408: 0,EUR,CASH,,0.0,,,IDEALPRO,,GBP,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 01:13:36,421 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x004\x000\x00EUR\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00GBP\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 01:13:36,421 - INFO - Requested historical data for all symbols
+2025-05-11 01:13:37,426 - INFO - disconnecting
+2025-05-11 01:13:37,426 - INFO - ANSWER connectionClosed {}
+2025-05-11 01:13:37,426 - INFO - Bot shutdown complete
