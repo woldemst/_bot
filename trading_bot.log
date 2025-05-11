@@ -37,3 +37,13 @@
 2025-05-11 01:13:37,426 - INFO - disconnecting
 2025-05-11 01:13:37,426 - INFO - ANSWER connectionClosed {}
 2025-05-11 01:13:37,426 - INFO - Bot shutdown complete
+2025-05-11 12:25:27,242 - INFO - Connecting to 127.0.0.1:4002
+2025-05-11 12:25:27,243 - INFO - could not connect
+2025-05-11 12:25:27,243 - INFO - disconnecting
+2025-05-11 12:25:27,243 - INFO - ANSWER connectionClosed {}
+2025-05-11 12:25:57,248 - ERROR - Connection timeout. Could not connect to TWS/IB Gateway.
+2025-05-11 12:46:46,543 - INFO - Connecting to 127.0.0.1:4002
+2025-05-11 12:46:46,543 - INFO - could not connect
+2025-05-11 12:46:46,543 - INFO - disconnecting
+2025-05-11 12:46:46,543 - INFO - ANSWER connectionClosed {}
+2025-05-11 12:47:16,548 - ERROR - Connection timeout. Could not connect to TWS/IB Gateway.

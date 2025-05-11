@@ -286,6 +286,7 @@ class ibapp(EClient, EWrapper):
 def run_loop(app):
     app.run()
 
+# Add a more robust retry mechanism for connection
 def main():
     # instantiate an ibapp
     app = ibapp()
@@ -295,16 +296,35 @@ def main():
         host = IB_HOST if IB_HOST else "127.0.0.1"
         port = int(PORT) if PORT else 4002
         
-        logger.info(f"Connecting to {host}:{port}")
-        app.connect(host, port, clientId=0)  # clientID identifies our application
+        # Add retry logic for connection
+        max_retries = 5
+        retry_count = 0
+        connected = False
         
-        # start the application's event loop in a thread
-        api_thread = Thread(target=run_loop, args=(app,), daemon=True)
-        api_thread.start()
+        while retry_count < max_retries and not connected:
+            try:
+                logger.info(f"Connecting to {host}:{port} (Attempt {retry_count+1}/{max_retries})")
+                app.connect(host, port, clientId=0)
+                
+                # start the application's event loop in a thread
+                api_thread = Thread(target=run_loop, args=(app,), daemon=True)
+                api_thread.start()
+                
+                # wait until the connection is ready
+                if app.connection_ready.wait(30):
+                    connected = True
+                    logger.info("Successfully connected to IB Gateway")
+                else:
+                    logger.warning("Connection timeout. Retrying...")
+                    retry_count += 1
+                    time.sleep(10)  # Wait before retry
+            except Exception as e:
+                logger.error(f"Connection error: {str(e)}")
+                retry_count += 1
+                time.sleep(10)  # Wait before retry
         
-        # wait until the Ewrapper.nextValidId callback is triggered, indicating a successful connection
-        if not app.connection_ready.wait(30):  # Wait up to 30 seconds for connection
-            logger.error("Connection timeout. Could not connect to TWS/IB Gateway.")
+        if not connected:
+            logger.error("Failed to connect after maximum retries. Exiting.")
             return
         
         # request account summary
