@@ -9,14 +9,43 @@ load_dotenv()
 IB_ACCOUNT = os.getenv("IB_ACCOUNT")
 IB_PASSWORD = os.getenv("IB_PASSWORD")
 IB_HOST = os.getenv("IB_HOST", "127.0.0.1")
-PORT = int(os.getenv("PORT", "4002"))
+PORT = int(os.getenv("PORT", "7496"))  # Updated to match your TWS port
 
 # Trading parameters
-SYMBOLS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "EURGBP"]
-MAX_OPEN = 5
-RISK_PER_TRADE = 0.01  # 1% per Trade
+SYMBOLS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD"]
+MAX_OPEN = 3  # Maximum 3 active positions at a time as per requirements
+RISK_PER_TRADE = 0.02  # 2% per Trade
 FAST_EMA = 5
 SLOW_EMA = 20
+
+# RSI parameters
+RSI_PERIOD = 14
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 30
+RSI_BULLISH = 50  # Above 50 for bullish
+RSI_BEARISH = 50  # Below 50 for bearish
+
+# Bollinger Bands parameters
+BB_PERIOD = 20
+BB_STD_DEV = 2
+
+# Timeframes for analysis
+TIMEFRAMES = {
+    "M1": "1 min",
+    "M15": "15 mins",
+    "H1": "1 hour",
+    "H4": "4 hours",
+    "D1": "1 day"
+}
+
+# Trailing stop parameters
+TRAILING_STOP_START = 0.5  # Start trailing at 50% of take profit
+TRAILING_STOP_STEP = 10  # 10 pips for EUR/USD
+
+# Leverage settings
+INITIAL_LEVERAGE = 5  # Start with 1:5 leverage
+PROFIT_THRESHOLD = 0.05  # 5% profit
+LEVERAGE_INCREASE = 0.5  # Increase by 50% when threshold reached
 
 # Configure logging
 logging.basicConfig(
