@@ -47,3 +47,219 @@
 2025-05-11 12:46:46,543 - INFO - disconnecting
 2025-05-11 12:46:46,543 - INFO - ANSWER connectionClosed {}
 2025-05-11 12:47:16,548 - ERROR - Connection timeout. Could not connect to TWS/IB Gateway.
+2025-05-11 13:19:23,552 - INFO - Connecting to 127.0.0.1:4002 (Attempt 1/5)
+2025-05-11 13:19:23,552 - INFO - could not connect
+2025-05-11 13:19:23,552 - INFO - disconnecting
+2025-05-11 13:19:23,552 - INFO - ANSWER connectionClosed {}
+2025-05-11 13:19:53,554 - WARNING - Connection timeout. Retrying...
+2025-05-11 13:20:03,557 - INFO - Connecting to 127.0.0.1:4002 (Attempt 2/5)
+2025-05-11 13:20:03,558 - INFO - could not connect
+2025-05-11 13:20:03,558 - INFO - disconnecting
+2025-05-11 13:20:03,559 - INFO - ANSWER connectionClosed {}
+2025-05-11 13:20:33,564 - WARNING - Connection timeout. Retrying...
+2025-05-11 13:20:43,565 - INFO - Connecting to 127.0.0.1:4002 (Attempt 3/5)
+2025-05-11 13:20:43,566 - INFO - could not connect
+2025-05-11 13:20:43,566 - INFO - disconnecting
+2025-05-11 13:20:43,566 - INFO - ANSWER connectionClosed {}
+2025-05-11 13:21:13,569 - WARNING - Connection timeout. Retrying...
+2025-05-11 13:21:23,569 - INFO - Connecting to 127.0.0.1:4002 (Attempt 4/5)
+2025-05-11 13:21:23,571 - INFO - could not connect
+2025-05-11 13:21:23,571 - INFO - disconnecting
+2025-05-11 13:21:23,571 - INFO - ANSWER connectionClosed {}
+2025-05-11 13:21:53,571 - WARNING - Connection timeout. Retrying...
+2025-05-11 13:22:03,573 - INFO - Connecting to 127.0.0.1:4002 (Attempt 5/5)
+2025-05-11 13:22:03,573 - INFO - could not connect
+2025-05-11 13:22:03,573 - INFO - disconnecting
+2025-05-11 13:22:03,574 - INFO - ANSWER connectionClosed {}
+2025-05-11 13:22:33,573 - WARNING - Connection timeout. Retrying...
+2025-05-11 13:22:43,578 - ERROR - Failed to connect after maximum retries. Exiting.
+2025-05-11 18:36:57,731 - INFO - Connecting to 127.0.0.1:4002 (Attempt 1/5)
+2025-05-11 18:36:57,731 - INFO - could not connect
+2025-05-11 18:36:57,731 - INFO - disconnecting
+2025-05-11 18:36:57,731 - INFO - ANSWER connectionClosed {}
+2025-05-11 18:37:07,780 - INFO - Connecting to 127.0.0.1:4002 (Attempt 1/5)
+2025-05-11 18:37:07,780 - INFO - could not connect
+2025-05-11 18:37:07,780 - INFO - disconnecting
+2025-05-11 18:37:07,780 - INFO - ANSWER connectionClosed {}
+2025-05-11 18:43:28,066 - INFO - Connecting to 127.0.0.1:4002 (Attempt 1/5)
+2025-05-11 18:43:28,160 - INFO - sent startApi
+2025-05-11 18:43:28,160 - INFO - REQUEST startApi {}
+2025-05-11 18:43:28,160 - INFO - SENDING startApi b'\x00\x00\x00\x0871\x002\x000\x00\x00'
+2025-05-11 18:43:28,160 - INFO - ANSWER connectAck {}
+2025-05-11 18:43:28,173 - INFO - ANSWER managedAccounts {'accountsList': 'DUM049051'}
+2025-05-11 18:43:28,178 - INFO - Connection ready, next valid order ID: 1
+2025-05-11 18:43:28,178 - INFO - Successfully connected to IB Gateway
+2025-05-11 18:43:28,178 - INFO - Starting trading strategy
+2025-05-11 18:43:28,179 - INFO - Requesting account summary
+2025-05-11 18:43:28,179 - INFO - REQUEST reqHistoricalData {'reqId': 0, 'contract': 4377258912: 0,EUR,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 18:43:28,179 - INFO - REQUEST reqAccountSummary {'reqId': 0, 'groupName': 'All', 'tags': 'AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage'}
+2025-05-11 18:43:28,179 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x000\x000\x00EUR\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 18:43:28,179 - INFO - SENDING reqAccountSummary b'\x00\x00\x01\xe662\x001\x000\x00All\x00AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage\x00'
+2025-05-11 18:43:28,180 - INFO - REQUEST reqHistoricalData {'reqId': 1, 'contract': 4378434192: 0,GBP,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 18:43:28,180 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x001\x000\x00GBP\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 18:43:28,180 - INFO - REQUEST reqHistoricalData {'reqId': 2, 'contract': 4378434512: 0,USD,CASH,,0.0,,,IDEALPRO,,JPY,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 18:43:28,181 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x002\x000\x00USD\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00JPY\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 18:43:28,181 - INFO - REQUEST reqHistoricalData {'reqId': 3, 'contract': 4378580096: 0,AUD,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 18:43:28,181 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x003\x000\x00AUD\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 18:43:28,181 - INFO - REQUEST reqHistoricalData {'reqId': 4, 'contract': 4378580400: 0,EUR,CASH,,0.0,,,IDEALPRO,,GBP,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 18:43:28,181 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x004\x000\x00EUR\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00GBP\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 18:43:28,181 - INFO - Requested historical data for all symbols
+2025-05-11 18:43:29,185 - INFO - disconnecting
+2025-05-11 18:43:29,186 - INFO - ANSWER connectionClosed {}
+2025-05-11 18:43:29,186 - INFO - Bot shutdown complete
+2025-05-11 19:20:39,293 - INFO - Connecting to 127.0.0.1:4002 (Attempt 1/5)
+2025-05-11 19:20:39,348 - INFO - sent startApi
+2025-05-11 19:20:39,348 - INFO - REQUEST startApi {}
+2025-05-11 19:20:39,348 - INFO - SENDING startApi b'\x00\x00\x00\x0871\x002\x000\x00\x00'
+2025-05-11 19:20:39,348 - INFO - ANSWER connectAck {}
+2025-05-11 19:20:39,366 - INFO - ANSWER managedAccounts {'accountsList': 'DUM049051'}
+2025-05-11 19:20:39,367 - INFO - Connection ready, next valid order ID: 1
+2025-05-11 19:20:39,368 - INFO - Starting trading strategy
+2025-05-11 19:20:39,368 - INFO - REQUEST reqHistoricalData {'reqId': 0, 'contract': 4439732784: 0,EUR,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:20:39,368 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x000\x000\x00EUR\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:20:39,368 - INFO - Successfully connected to IB Gateway
+2025-05-11 19:20:39,369 - INFO - Requesting account summary
+2025-05-11 19:20:39,369 - INFO - REQUEST reqHistoricalData {'reqId': 1, 'contract': 4440957136: 0,GBP,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:20:39,369 - INFO - REQUEST reqAccountSummary {'reqId': 0, 'groupName': 'All', 'tags': 'AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage'}
+2025-05-11 19:20:39,369 - INFO - Error: -1, Code: 2104, Message: Market data farm connection is OK:usfarm
+2025-05-11 19:20:39,369 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x001\x000\x00GBP\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:20:39,369 - INFO - SENDING reqAccountSummary b'\x00\x00\x01\xe662\x001\x000\x00All\x00AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage\x00'
+2025-05-11 19:20:39,370 - INFO - Connection notice: Market data farm connection is OK:usfarm
+2025-05-11 19:20:39,370 - INFO - Error: -1, Code: 2106, Message: HMDS data farm connection is OK:cashhmds
+2025-05-11 19:20:39,370 - INFO - Error: -1, Code: 2106, Message: HMDS data farm connection is OK:ushmds
+2025-05-11 19:20:39,370 - INFO - REQUEST reqHistoricalData {'reqId': 2, 'contract': 4440957456: 0,USD,CASH,,0.0,,,IDEALPRO,,JPY,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:20:39,370 - INFO - Error: -1, Code: 2158, Message: Sec-def data farm connection is OK:secdefnj
+2025-05-11 19:20:39,370 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x002\x000\x00USD\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00JPY\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:20:39,370 - INFO - Connection notice: Sec-def data farm connection is OK:secdefnj
+2025-05-11 19:20:39,370 - INFO - REQUEST reqHistoricalData {'reqId': 3, 'contract': 4441085360: 0,AUD,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:20:39,370 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x003\x000\x00AUD\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:20:39,371 - INFO - REQUEST reqHistoricalData {'reqId': 4, 'contract': 4441085664: 0,EUR,CASH,,0.0,,,IDEALPRO,,GBP,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:20:39,371 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x004\x000\x00EUR\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00GBP\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:20:39,371 - INFO - Requested historical data for all symbols
+2025-05-11 19:20:39,567 - INFO - Error: 0, Code: 10285, Message: Your API version does not support fractional size rules. Please upgrade to a minimum version 163.
+2025-05-11 19:20:39,650 - INFO - Error: 1, Code: 10285, Message: Your API version does not support fractional size rules. Please upgrade to a minimum version 163.
+2025-05-11 19:20:39,751 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: AccountType, Value: INDIVIDUAL, Currency: 
+2025-05-11 19:20:39,751 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: Cushion, Value: 1, Currency: 
+2025-05-11 19:20:39,751 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadNextChange, Value: 0, Currency: 
+2025-05-11 19:20:39,752 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: AccruedCash, Value: 0.00, Currency: EUR
+2025-05-11 19:20:39,752 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: AvailableFunds, Value: 1000000.00, Currency: EUR
+2025-05-11 19:20:39,752 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: BuyingPower, Value: 6666666.67, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: EquityWithLoanValue, Value: 1000000.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: ExcessLiquidity, Value: 1000000.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: FullAvailableFunds, Value: 1000000.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: FullExcessLiquidity, Value: 1000000.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: FullInitMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: FullMaintMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: GrossPositionValue, Value: 0.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: InitMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadAvailableFunds, Value: 1000000.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadExcessLiquidity, Value: 1000000.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadInitMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadMaintMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:20:39,753 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: MaintMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:20:39,754 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: NetLiquidation, Value: 1000000.00, Currency: EUR
+2025-05-11 19:20:39,754 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: TotalCashValue, Value: 1000000.00, Currency: EUR
+2025-05-11 19:20:39,754 - INFO - AccountSummaryEnd. ReqId: 0
+2025-05-11 19:20:39,955 - INFO - Error: 3, Code: 10285, Message: Your API version does not support fractional size rules. Please upgrade to a minimum version 163.
+2025-05-11 19:20:40,057 - INFO - Error: 4, Code: 10285, Message: Your API version does not support fractional size rules. Please upgrade to a minimum version 163.
+2025-05-11 19:20:40,375 - INFO - disconnecting
+2025-05-11 19:20:40,376 - INFO - ANSWER connectionClosed {}
+2025-05-11 19:20:40,376 - INFO - Bot shutdown complete
+2025-05-11 19:25:47,976 - INFO - Connecting to 127.0.0.1:4002 (Attempt 1/5)
+2025-05-11 19:25:48,050 - INFO - sent startApi
+2025-05-11 19:25:48,050 - INFO - REQUEST startApi {}
+2025-05-11 19:25:48,050 - INFO - SENDING startApi b'\x00\x00\x00\x0871\x002\x000\x00\x00'
+2025-05-11 19:25:48,050 - INFO - ANSWER connectAck {}
+2025-05-11 19:25:48,077 - INFO - ANSWER managedAccounts {'accountsList': 'DUM049051'}
+2025-05-11 19:25:48,082 - INFO - Connection ready, next valid order ID: 1
+2025-05-11 19:25:48,082 - INFO - Successfully connected to IB Gateway
+2025-05-11 19:25:48,082 - INFO - Starting trading strategy
+2025-05-11 19:25:48,082 - INFO - Requesting account summary
+2025-05-11 19:25:48,083 - INFO - REQUEST reqHistoricalData {'reqId': 0, 'contract': 4400247008: 0,EUR,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:25:48,083 - INFO - REQUEST reqAccountSummary {'reqId': 0, 'groupName': 'All', 'tags': 'AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage'}
+2025-05-11 19:25:48,083 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x000\x000\x00EUR\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:25:48,083 - INFO - SENDING reqAccountSummary b'\x00\x00\x01\xe662\x001\x000\x00All\x00AccountType,NetLiquidation,TotalCashValue,SettledCash,AccruedCash,BuyingPower,EquityWithLoanValue,PreviousEquityWithLoanValue,GrossPositionValue,ReqTEquity,ReqTMargin,SMA,InitMarginReq,MaintMarginReq,AvailableFunds,ExcessLiquidity,Cushion,FullInitMarginReq,FullMaintMarginReq,FullAvailableFunds,FullExcessLiquidity,LookAheadNextChange,LookAheadInitMarginReq,LookAheadMaintMarginReq,LookAheadAvailableFunds,LookAheadExcessLiquidity,HighestSeverity,DayTradesRemaining,Leverage\x00'
+2025-05-11 19:25:48,083 - INFO - REQUEST reqHistoricalData {'reqId': 1, 'contract': 4401487440: 0,GBP,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:25:48,083 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x001\x000\x00GBP\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:25:48,083 - INFO - REQUEST reqHistoricalData {'reqId': 2, 'contract': 4401487760: 0,USD,CASH,,0.0,,,IDEALPRO,,JPY,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:25:48,084 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x002\x000\x00USD\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00JPY\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:25:48,084 - INFO - REQUEST reqHistoricalData {'reqId': 3, 'contract': 4401583232: 0,AUD,CASH,,0.0,,,IDEALPRO,,USD,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:25:48,084 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x003\x000\x00AUD\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00USD\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:25:48,084 - INFO - REQUEST reqHistoricalData {'reqId': 4, 'contract': 4401583536: 0,EUR,CASH,,0.0,,,IDEALPRO,,GBP,,,False,,combo:, 'endDateTime': '', 'durationStr': '100 D', 'barSizeSetting': '1 min', 'whatToShow': 'MIDPOINT', 'useRTH': 1, 'formatDate': 1, 'keepUpToDate': False, 'chartOptions': []}
+2025-05-11 19:25:48,084 - INFO - SENDING reqHistoricalData b'\x00\x00\x00F20\x004\x000\x00EUR\x00CASH\x00\x000.0\x00\x00\x00IDEALPRO\x00\x00GBP\x00\x00\x000\x00\x001 min\x00100 D\x001\x00MIDPOINT\x001\x000\x00\x00'
+2025-05-11 19:25:48,084 - INFO - Requested historical data for all symbols
+2025-05-11 19:25:48,087 - INFO - Error: -1, Code: 2104, Message: Market data farm connection is OK:usfarm
+2025-05-11 19:25:48,087 - INFO - Connection notice: Market data farm connection is OK:usfarm
+2025-05-11 19:25:48,087 - INFO - Error: -1, Code: 2106, Message: HMDS data farm connection is OK:ushmds
+2025-05-11 19:25:48,087 - INFO - Error: -1, Code: 2158, Message: Sec-def data farm connection is OK:secdefnj
+2025-05-11 19:25:48,088 - INFO - Connection notice: Sec-def data farm connection is OK:secdefnj
+2025-05-11 19:25:48,315 - INFO - Error: 0, Code: 10285, Message: Your API version does not support fractional size rules. Please upgrade to a minimum version 163.
+2025-05-11 19:25:48,351 - INFO - Error: 1, Code: 10285, Message: Your API version does not support fractional size rules. Please upgrade to a minimum version 163.
+2025-05-11 19:25:48,452 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: AccountType, Value: INDIVIDUAL, Currency: 
+2025-05-11 19:25:48,453 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: Cushion, Value: 1, Currency: 
+2025-05-11 19:25:48,453 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadNextChange, Value: 0, Currency: 
+2025-05-11 19:25:48,453 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: AccruedCash, Value: 0.00, Currency: EUR
+2025-05-11 19:25:48,453 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: AvailableFunds, Value: 1000000.00, Currency: EUR
+2025-05-11 19:25:48,453 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: BuyingPower, Value: 6666666.67, Currency: EUR
+2025-05-11 19:25:48,453 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: EquityWithLoanValue, Value: 1000000.00, Currency: EUR
+2025-05-11 19:25:48,454 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: ExcessLiquidity, Value: 1000000.00, Currency: EUR
+2025-05-11 19:25:48,454 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: FullAvailableFunds, Value: 1000000.00, Currency: EUR
+2025-05-11 19:25:48,454 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: FullExcessLiquidity, Value: 1000000.00, Currency: EUR
+2025-05-11 19:25:48,454 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: FullInitMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:25:48,454 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: FullMaintMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:25:48,454 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: GrossPositionValue, Value: 0.00, Currency: EUR
+2025-05-11 19:25:48,454 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: InitMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:25:48,454 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadAvailableFunds, Value: 1000000.00, Currency: EUR
+2025-05-11 19:25:48,454 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadExcessLiquidity, Value: 1000000.00, Currency: EUR
+2025-05-11 19:25:48,455 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadInitMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:25:48,455 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: LookAheadMaintMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:25:48,455 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: MaintMarginReq, Value: 0.00, Currency: EUR
+2025-05-11 19:25:48,455 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: NetLiquidation, Value: 1000000.00, Currency: EUR
+2025-05-11 19:25:48,455 - INFO - AccountSummary. ReqId: 0, Account: DUM049051, Tag: TotalCashValue, Value: 1000000.00, Currency: EUR
+2025-05-11 19:25:48,455 - INFO - AccountSummaryEnd. ReqId: 0
+2025-05-11 19:25:49,087 - INFO - disconnecting
+2025-05-11 19:25:49,087 - INFO - ANSWER connectionClosed {}
+2025-05-11 19:25:49,087 - INFO - Bot shutdown complete
+2025-05-14 22:30:18,071 - INFO - Connecting to 127.0.0.1:7496 (Attempt 1/5)
+2025-05-14 22:30:18,072 - INFO - Error: -1, Code: 502, Message: Couldn't connect to TWS. Confirm that "Enable ActiveX and Socket EClients" 
+is enabled and connection port is the same as "Socket Port" on the 
+TWS "Edit->Global Configuration...->API->Settings" menu. Live Trading ports: 
+TWS: 7496; IB Gateway: 4001. Simulated Trading ports for new installations 
+of version 954.1 or newer:  TWS: 7497; IB Gateway: 4002
+2025-05-14 22:30:18,072 - ERROR - Critical error detected. Stopping bot...
+2025-05-14 22:30:18,072 - INFO - could not connect
+2025-05-14 22:30:18,072 - INFO - disconnecting
+2025-05-14 22:30:18,072 - INFO - ANSWER connectionClosed {}
+2025-05-14 22:30:48,075 - WARNING - Connection timeout. Retrying...
+2025-05-14 22:30:58,079 - INFO - Connecting to 127.0.0.1:7496 (Attempt 2/5)
+2025-05-14 22:30:58,081 - INFO - Error: -1, Code: 502, Message: Couldn't connect to TWS. Confirm that "Enable ActiveX and Socket EClients" 
+is enabled and connection port is the same as "Socket Port" on the 
+TWS "Edit->Global Configuration...->API->Settings" menu. Live Trading ports: 
+TWS: 7496; IB Gateway: 4001. Simulated Trading ports for new installations 
+of version 954.1 or newer:  TWS: 7497; IB Gateway: 4002
+2025-05-14 22:30:58,081 - ERROR - Critical error detected. Stopping bot...
+2025-05-14 22:30:58,081 - INFO - could not connect
+2025-05-14 22:30:58,082 - INFO - disconnecting
+2025-05-14 22:30:58,082 - INFO - ANSWER connectionClosed {}
+2025-05-14 22:31:28,085 - WARNING - Connection timeout. Retrying...
+2025-05-14 22:31:38,087 - INFO - Connecting to 127.0.0.1:7496 (Attempt 3/5)
+2025-05-14 22:31:38,088 - INFO - Error: -1, Code: 502, Message: Couldn't connect to TWS. Confirm that "Enable ActiveX and Socket EClients" 
+is enabled and connection port is the same as "Socket Port" on the 
+TWS "Edit->Global Configuration...->API->Settings" menu. Live Trading ports: 
+TWS: 7496; IB Gateway: 4001. Simulated Trading ports for new installations 
+of version 954.1 or newer:  TWS: 7497; IB Gateway: 4002
+2025-05-14 22:31:38,089 - ERROR - Critical error detected. Stopping bot...
+2025-05-14 22:31:38,089 - INFO - could not connect
+2025-05-14 22:31:38,089 - INFO - disconnecting
+2025-05-14 22:31:38,089 - INFO - ANSWER connectionClosed {}
+2025-05-14 22:32:08,094 - WARNING - Connection timeout. Retrying...
+2025-05-14 22:32:18,101 - INFO - Connecting to 127.0.0.1:7496 (Attempt 4/5)
+2025-05-14 22:32:18,102 - INFO - Error: -1, Code: 502, Message: Couldn't connect to TWS. Confirm that "Enable ActiveX and Socket EClients" 
+is enabled and connection port is the same as "Socket Port" on the 
+TWS "Edit->Global Configuration...->API->Settings" menu. Live Trading ports: 
+TWS: 7496; IB Gateway: 4001. Simulated Trading ports for new installations 
+of version 954.1 or newer:  TWS: 7497; IB Gateway: 4002
+2025-05-14 22:32:18,102 - ERROR - Critical error detected. Stopping bot...
+2025-05-14 22:32:18,102 - INFO - could not connect
+2025-05-14 22:32:18,102 - INFO - disconnecting
+2025-05-14 22:32:18,103 - INFO - ANSWER connectionClosed {}

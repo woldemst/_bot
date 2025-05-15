@@ -1,4 +1,22 @@
-venv 
+# Virtual environment
+venv/
+ENV/
 .env
+env.bak/
+venv.bak/
+
+
+# macOS
 .DS_Store
+
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Python virtual environment
+venv/
+__pycache__/
+
+# API logs
 trading_bot.log
