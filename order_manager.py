@@ -1,3 +1,4 @@
+import pandas as pd
 from ibapi.contract import Contract
 from ibapi.order import Order
 from config import (
@@ -40,8 +41,12 @@ class OrderManager:
             # Calculate risk amount
             risk_amount = account_value * RISK_PER_TRADE
             
-            # Calculate position size with leverage
+            # Leverage increase on profit
+            profit_threshold = getattr(self.client, "profit_threshold", 0.05)
             leverage = INITIAL_LEVERAGE
+            if hasattr(self.client, "starting_equity") and account_value > self.client.starting_equity * (1 + profit_threshold):
+                leverage = int(INITIAL_LEVERAGE * 1.5)  # Increase leverage by 50% when profitable
+            
             symbol_multiplier = 100 if is_jpy_pair else 10000
             qty = max(1, int((risk_amount * leverage) / (sl_dist * symbol_multiplier)))
             

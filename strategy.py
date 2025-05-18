@@ -1,7 +1,7 @@
-import pandas as pd
-import numpy as np
+# import pandas as pd
+# import numpy as np
 from config import (
-    logger, FAST_EMA, SLOW_EMA, MAX_OPEN, SYMBOLS, TIMEFRAMES,
+    logger, SLOW_EMA, MAX_OPEN, SYMBOLS, TIMEFRAMES,
     RSI_OVERBOUGHT, RSI_OVERSOLD, RSI_BULLISH, RSI_BEARISH
 )
 

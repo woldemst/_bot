@@ -2,8 +2,9 @@ from threading import Thread
 import time
 from ibapi.account_summary_tags import AccountSummaryTags
 
-from config import logger, IB_HOST, PORT
+from config import logger
 from connection import IBConnection, run_loop
+
 
 def main():
     # Instantiate the connection
@@ -11,8 +12,9 @@ def main():
     
     try:
         # Connect using environment variables
-        host = IB_HOST if IB_HOST else "127.0.0.1"
-        port = PORT if PORT else 7497
+        # host = IB_HOST if IB_HOST else "127.0.0.1"
+        host = "127.0.0.1"
+        port = 7497
         
         # Add retry logic for connection
         max_retries = 5
@@ -31,8 +33,8 @@ def main():
                 # Wait until the connection is ready
                 if app.connection_ready.wait(30):
                     connected = True
-                    logger.info("Successfully connected to IB Gateway")
-                else:
+                    logger.info("Successfully connected to IB API")
+                else: 
                     logger.warning("Connection timeout. Retrying...")
                     retry_count += 1
                     time.sleep(10)  # Wait before retry

@@ -2,8 +2,8 @@ from threading import Event
 import time
 from ibapi.wrapper import EWrapper
 from ibapi.client import EClient
-from ibapi.common import TickerId
-from typing import Any
+# from ibapi.common import TickerId
+# from typing import Any
 # Removed unused import AccountSummaryTags
 import threading
 
@@ -25,7 +25,7 @@ class IBConnection(EClient, EWrapper):
         self.strategy = TradingStrategy(self.data_handler)
         self.order_manager = OrderManager(self)
     
-    def error(self, reqId: TickerId, errorCode: int, errorString: str, contract: Any = None):
+    def error(self, reqId, errorCode, errorString, advancedOrderRejectJson=None, errorTime=None):
         logger.info(f"Error: {reqId}, Code: {errorCode}, Message: {errorString}")
         
         # Critical errors that should stop the bot

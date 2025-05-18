@@ -1,5 +1,5 @@
 import pandas as pd
-import numpy as np
+# import numpy as np
 from config import logger, SYMBOLS, TIMEFRAMES, RSI_PERIOD, BB_PERIOD, BB_STD_DEV
 
 class DataHandler:
