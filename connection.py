@@ -12,7 +12,7 @@ from data_handler import DataHandler
 from strategy import TradingStrategy
 from order_manager import OrderManager
 
-class IBConnection(EClient, EWrapper):
+class IBConnection(EWrapper, EClient):
     def __init__(self):
         EClient.__init__(self, self)
         self.done = Event()  # use threading.Event to signal between threads
@@ -56,7 +56,7 @@ class IBConnection(EClient, EWrapper):
         """Store account summary value"""
         self.accountValue = (key, val, cur)
     
-    def accountSummary(self, reqId: int, account: str, tag: str, value: str, currency: str):
+    def accountSummary(self, reqId, account, tag, value, currency):
         """Handle account summary information"""
         logger.info(f"AccountSummary. ReqId: {reqId}, Account: {account}, Tag: {tag}, Value: {value}, Currency: {currency}")
     
@@ -113,6 +113,7 @@ class IBConnection(EClient, EWrapper):
         """Request historical data for all symbols"""
         from config import SYMBOLS
         from ibapi.contract import Contract
+
         
         for i, sym in enumerate(SYMBOLS):
             contract = Contract()
@@ -126,6 +127,14 @@ class IBConnection(EClient, EWrapper):
         
         logger.info("Requested historical data for all symbols")
         time.sleep(5)  # Wait for data to arrive
+    
+    def request_market_data(self):
+        from ibapi.contract import Contract
+
+        contract = Contract()
+        contract.currency = "USD"
+        self.reqMktData(1, contract, "", False, False, [])
+        
 
 def run_loop(app):
     """Run the event loop"""

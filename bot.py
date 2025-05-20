@@ -11,7 +11,7 @@ def main():
     app = IBConnection()
     
     try:
-        # Connect using environment variables
+        # Connect using environment variables                                                       
         # host = IB_HOST if IB_HOST else "127.0.0.1"
         host = "127.0.0.1"
         port = 7497
