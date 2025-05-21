@@ -1,6 +1,7 @@
 import pandas as pd
 # import numpy as np
 from config import logger, SYMBOLS, TIMEFRAMES, RSI_PERIOD, BB_PERIOD, BB_STD_DEV
+import os
 
 class DataHandler:
     def __init__(self):
@@ -88,6 +89,12 @@ class DataHandler:
             
             # Update the dataframe
             self.data[symbol][timeframe] = df
+            
+            # Store extended history for AI training
+            history_path = f"historical_data/{symbol}_{timeframe}.csv"
+            df.to_csv(history_path, mode='a', header=not os.path.exists(history_path))
+            
+            logger.info(f"Updated historical data storage at {history_path}")
             
         except Exception as e:
             logger.error(f"Error calculating indicators for {symbol} {timeframe}: {str(e)}")

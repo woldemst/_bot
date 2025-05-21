@@ -13,7 +13,15 @@ PORT = int(os.getenv("PORT", "7496"))  # Updated to match your TWS port
 
 # Trading parameters
 SYMBOLS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD"]
-MAX_OPEN = 3  # Maximum 3 active positions at a time as per requirements
+# Updated trading parameters
+MAX_OPEN = 3
+LEVERAGE = 30  # 1:30 leverage
+MICRO_LOT = 0.01
+RSI_BUY_THRESHOLD = 30
+RSI_SELL_THRESHOLD = 70
+PROFIT_THRESHOLD = 0.05  # 5% profit for leverage increase
+LEVERAGE_INCREASE = 0.5  # 50% increase
+TRAILING_STOP_START = 0.5  # 50% of take profit
 RISK_PER_TRADE = 0.02  # 2% per Trade
 FAST_EMA = 5
 SLOW_EMA = 20

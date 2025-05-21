@@ -109,16 +109,23 @@ class TradingStrategy:
             return "neutral"
     
     def _check_entry_signal(self, df, trend_direction):
-        """Check for entry signals based on multiple indicators"""
-        if df.empty or len(df) < 30:  # Need enough data for indicators
+        if df.empty or len(df) < 30:
             return None
             
         # Get latest values
+        rsi = df['rsi'].iloc[-1]
+        
+        # Enhanced RSI conditions
+        if trend_direction == "BUY" and rsi > 50:
+            return None  # Reject if RSI not below 50
+        if trend_direction == "SELL" and rsi < 50:
+            return None
+            
+        # Existing indicator calculations
         fast_ema = df['ema_fast'].iloc[-1]
         slow_ema = df['ema_slow'].iloc[-1]
         fast_ema_prev = df['ema_fast'].iloc[-2]
         macd_hist = df['histogram'].iloc[-1]
-        rsi = df['rsi'].iloc[-1]
         price = df['close'].iloc[-1]
         bb_upper = df['bb_upper'].iloc[-1]
         bb_lower = df['bb_lower'].iloc[-1]
@@ -159,6 +166,20 @@ class TradingStrategy:
             if (ma_signal or bb_signal) and rsi_signal and macd_signal:
                 return "SELL"
                 
+        # Add Bollinger Band touch detection
+        current_price = df['close'].iloc[-1]
+        bb_upper = df['bb_upper'].iloc[-1]
+        bb_lower = df['bb_lower'].iloc[-1]
+        
+        if trend_direction == "BUY":
+            bb_signal = current_price <= bb_lower
+        else:
+            bb_signal = current_price >= bb_upper
+            
+        # Final signal validation
+        if (ma_signal or bb_signal) and rsi_signal and macd_signal:
+            return trend_direction
+            
         return None
     
     def update_position(self, symbol, status):
